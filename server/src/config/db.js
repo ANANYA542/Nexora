@@ -1,7 +1,5 @@
 const { Pool } = require('pg');
 
-// Use SSL for remote databases (Render, Railway, Neon, etc.)
-// Skip SSL for local development (localhost / 127.0.0.1)
 const isLocal =
   !process.env.DATABASE_URL ||
   process.env.DATABASE_URL.includes('localhost') ||
