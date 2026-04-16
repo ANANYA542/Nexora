@@ -34,19 +34,12 @@ class AuthService {
     return { user: safeUser, token };
   }
 
-  /**
-   * Return the logged-in user's profile (no password_hash).
-   */
   async getProfile(userId) {
     const user = await userRepository.findById(userId);
     if (!user) throw new AppError('User not found', 404);
     return user;
   }
 
-  /**
-   * Update name and/or password.
-   * If changing password, requires current password for verification.
-   */
   async updateProfile(userId, { name, current_password, new_password }) {
     const updates = {};
 
@@ -58,7 +51,6 @@ class AuthService {
       if (!current_password) {
         throw new AppError('Current password is required to set a new password', 400);
       }
-      // Fetch full user record (with password_hash) to verify current password
       const fullUser = await userRepository.findByEmail(
         (await userRepository.findById(userId)).email
       );

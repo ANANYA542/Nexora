@@ -30,10 +30,6 @@ class UserRepository {
     return rows[0];
   }
 
-  /**
-   * Update a user's name (and optionally password_hash).
-   * Returns the updated user without sensitive fields.
-   */
   async updateById(id, fields) {
     const allowed = ['name', 'password_hash'];
     const setClauses = [];
