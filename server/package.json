@@ -1,0 +1,30 @@
+{
+  "name": "finance-tracker-server",
+  "version": "1.0.0",
+  "description": "Personal Finance Tracker — Node.js/Express/PostgreSQL backend",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "db:migrate": "psql -U $DB_USER -d $DB_NAME -f migrations/001_initial_schema.sql"
+  },
+  "keywords": [
+    "finance",
+    "tracker",
+    "nodejs",
+    "express",
+    "postgresql"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-validator": "^7.3.2",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.20.0",
+    "uuid": "^11.1.0",
+    "zod": "^3.24.2"
+  }
+}
