@@ -30,6 +30,24 @@ class UserRepository {
     return rows[0];
   }
 
+  async findByGoogleId(googleId) {
+    const { rows } = await pool.query(
+      'SELECT id, name, email, created_at, updated_at FROM users WHERE google_id = $1 LIMIT 1',
+      [googleId]
+    );
+    return rows[0] || null;
+  }
+
+  async createGoogleUser({ name, email, googleId }) {
+    const { rows } = await pool.query(
+      `INSERT INTO users (name, email, password_hash, google_id, auth_provider)
+       VALUES ($1, $2, '', $3, 'google')
+       RETURNING id, name, email, created_at`,
+      [name, email, googleId]
+    );
+    return rows[0];
+  }
+
   async updateById(id, fields) {
     const allowed = ['name', 'password_hash'];
     const setClauses = [];

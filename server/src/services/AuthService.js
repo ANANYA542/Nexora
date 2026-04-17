@@ -1,7 +1,10 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { OAuth2Client } = require('google-auth-library');
 const userRepository = require('../repositories/UserRepository');
 const AppError = require('../utils/AppError');
+
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const SALT_ROUNDS = 12;
 
@@ -69,7 +72,32 @@ class AuthService {
     return updated;
   }
 
+  async googleLogin(idToken) {
+    const ticket = await googleClient.verifyIdToken({
+      idToken,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    const { sub: googleId, email, name } = payload;
+
+
+    let user = await userRepository.findByGoogleId(googleId);
+
+    if (!user) {
+      const existingByEmail = await userRepository.findByEmail(email);
+      if (existingByEmail) {
+        throw new AppError('An account with this email already exists. Please log in with email and password.', 409);
+      }
+      user = await userRepository.createGoogleUser({ name, email, googleId });
+    }
+
+    const token = this._signToken(user);
+    return { user, token };
+  }
+
   _signToken(user) {
+
     return jwt.sign(
       { sub: user.id, email: user.email },
       process.env.JWT_SECRET,

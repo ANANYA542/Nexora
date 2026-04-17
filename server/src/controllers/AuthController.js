@@ -12,6 +12,12 @@ class AuthController {
     sendSuccess(res, { user, token }, 'Login successful');
   }
 
+  async googleLogin(req, res) {
+    const { id_token } = req.body;
+    const { user, token } = await authService.googleLogin(id_token);
+    sendSuccess(res, { user, token }, 'Google login successful');
+  }
+
   async getProfile(req, res) {
     const user = await authService.getProfile(req.user.id);
     sendSuccess(res, { user });
