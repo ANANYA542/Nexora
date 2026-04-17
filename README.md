@@ -270,6 +270,12 @@ Endpoints intercept the `TransactionService` to enforce balance guarding and tri
 <img src="./api_testing_Screenshots/post_income_transaction.png" width="600" alt="Post Income Transaction">
 <br><br>
 <img src="./api_testing_Screenshots/get_Transaction.png" width="600" alt="Get Transactions">
+<br><br>
+<img src="./api_testing_Screenshots/get_single_Transaction.png" width="600" alt="Get Single Transaction">
+<br><br>
+<img src="./api_testing_Screenshots/transaction_update.png" width="600" alt="Update Transaction">
+<br><br>
+<img src="./api_testing_Screenshots/delete_transaction.png" width="600" alt="Delete Transaction">
 </details>
 
 ### 4.4 Dashboard
@@ -535,6 +541,27 @@ flowchart LR
 
 ---
 
+## 6. API Reference & Testing Screenshots
+
+While most API tests are documented under their specific feature sections above, additional core endpoints are tested here:
+
+### Category Management API
+<details>
+<summary><b>View Postman Category Tests</b></summary>
+<br>
+<img src="./api_testing_Screenshots/post_categories.png" width="600" alt="Create Category">
+<br><br>
+<img src="./api_testing_Screenshots/get_categories.png" width="600" alt="Get Categories">
+</details>
+
+### Server Health Check
+<details>
+<summary><b>View Postman Health Check Test</b></summary>
+<br>
+<img src="./api_testing_Screenshots/heath_check.png" width="600" alt="Server Health Check">
+</details>
+
+---
 
 ## 7. Tech Stack
 
