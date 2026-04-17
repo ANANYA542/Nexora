@@ -14,10 +14,10 @@ class DashboardRepository {
 
     const { rows } = await pool.query(
       `SELECT
-         COALESCE(SUM(CASE WHEN type = 'income'  THEN amount ELSE 0 END), 0) AS total_income,
-         COALESCE(ABS(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END)), 0) AS total_expense,
-         COALESCE(SUM(CASE WHEN type = 'income'  THEN amount ELSE 0 END), 0)
-         - COALESCE(ABS(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END)), 0) AS savings
+         COALESCE(SUM(CASE WHEN type = 'income'  THEN converted_amount ELSE 0 END), 0) AS total_income,
+         COALESCE(ABS(SUM(CASE WHEN type = 'expense' THEN converted_amount ELSE 0 END)), 0) AS total_expense,
+         COALESCE(SUM(CASE WHEN type = 'income'  THEN converted_amount ELSE 0 END), 0)
+         - COALESCE(ABS(SUM(CASE WHEN type = 'expense' THEN converted_amount ELSE 0 END)), 0) AS savings
        FROM transactions
        WHERE ${where}`,
       params
@@ -39,7 +39,7 @@ class DashboardRepository {
       `SELECT
          c.id   AS category_id,
          c.name AS category_name,
-         ABS(SUM(t.amount)) AS total
+         ABS(SUM(t.converted_amount)) AS total
        FROM transactions t
        JOIN categories c ON c.id = t.category_id
        WHERE ${where}
@@ -64,7 +64,7 @@ class DashboardRepository {
       `SELECT
          c.id   AS category_id,
          c.name AS category_name,
-         SUM(t.amount) AS total
+         SUM(t.converted_amount) AS total
        FROM transactions t
        JOIN categories c ON c.id = t.category_id
        WHERE ${where}
@@ -88,7 +88,7 @@ class DashboardRepository {
     const { rows } = await pool.query(
       `SELECT
          date,
-         ABS(SUM(amount)) AS total_expense
+         ABS(SUM(converted_amount)) AS total_expense
        FROM transactions
        WHERE ${where}
        GROUP BY date
@@ -111,7 +111,7 @@ class DashboardRepository {
     const { rows } = await pool.query(
       `SELECT
          date,
-         ABS(SUM(amount)) AS total_expense
+         ABS(SUM(converted_amount)) AS total_expense
        FROM transactions
        WHERE ${where}
        GROUP BY date

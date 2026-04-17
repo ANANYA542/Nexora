@@ -18,10 +18,10 @@ class ReportRepository {
     const { rows } = await pool.query(
       `SELECT
          TO_CHAR(DATE_TRUNC('month', date), 'YYYY-MM') AS month,
-         COALESCE(SUM(CASE WHEN type = 'income'  THEN amount ELSE 0 END), 0)        AS total_income,
-         COALESCE(ABS(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END)), 0)   AS total_expense,
-         COALESCE(SUM(CASE WHEN type = 'income'  THEN amount ELSE 0 END), 0)
-         - COALESCE(ABS(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END)), 0) AS savings
+         COALESCE(SUM(CASE WHEN type = 'income'  THEN converted_amount ELSE 0 END), 0)        AS total_income,
+         COALESCE(ABS(SUM(CASE WHEN type = 'expense' THEN converted_amount ELSE 0 END)), 0)   AS total_expense,
+         COALESCE(SUM(CASE WHEN type = 'income'  THEN converted_amount ELSE 0 END), 0)
+         - COALESCE(ABS(SUM(CASE WHEN type = 'expense' THEN converted_amount ELSE 0 END)), 0) AS savings
        FROM transactions
        WHERE ${where}
        GROUP BY DATE_TRUNC('month', date)

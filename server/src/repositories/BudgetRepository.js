@@ -27,7 +27,7 @@ class BudgetRepository {
        LEFT JOIN (
          SELECT
            category_id,
-           ABS(SUM(amount)) AS total
+           ABS(SUM(converted_amount)) AS total
          FROM transactions
          WHERE user_id = $1
            AND type = 'expense'
