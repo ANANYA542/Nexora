@@ -25,9 +25,10 @@ const updateProfileSchema = z.object({
 const createTransactionSchema = z.object({
   category_id: z.string().uuid('Invalid category ID'),
   type: z.enum(['income', 'expense']),
-  amount: z
+  amount: z.coerce
     .number({ invalid_type_error: 'Amount must be a number' })
     .refine((v) => v !== 0, { message: 'Amount cannot be zero' }),
+  currency: z.string().max(10).optional().default('INR'),
   description: z.string().max(500).optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD').optional(),
 });
