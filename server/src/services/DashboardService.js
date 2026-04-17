@@ -1,4 +1,6 @@
 const dashboardRepository = require('../repositories/DashboardRepository');
+const notificationService = require('./NotificationService');
+const userRepository = require('../repositories/UserRepository');
 
 class DashboardService {
   async getDashboard(userId, filters) {
@@ -10,6 +12,15 @@ class DashboardService {
         dashboardRepository.getDailyExpenses(userId, filters),
         dashboardRepository.getHighestSpendingDay(userId, filters),
       ]);
+
+    // Trigger insight notifications in the background
+    userRepository.findById(userId).then(user => {
+      if (user) {
+        notificationService._checkSpendingHabitInsight(user).catch(() => {});
+        notificationService._checkRecurringPayments(user).catch(() => {});
+        notificationService._checkInactivity(user).catch(() => {});
+      }
+    }).catch(() => {});
 
     return {
       summary: {
