@@ -14,15 +14,23 @@ class TransactionController {
   }
 
   async createTransaction(req, res) {
-    const transaction = await transactionService.createTransaction(req.user.id, req.body);
+    const payload = { ...req.body };
+    if (req.file) {
+      payload.receipt_url = `/uploads/receipts/${req.file.filename}`;
+    }
+    const transaction = await transactionService.createTransaction(req.user.id, payload);
     sendSuccess(res, { transaction }, 'Transaction created', 201);
   }
 
   async updateTransaction(req, res) {
+    const payload = { ...req.body };
+    if (req.file) {
+      payload.receipt_url = `/uploads/receipts/${req.file.filename}`;
+    }
     const transaction = await transactionService.updateTransaction(
       req.user.id,
       req.params.id,
-      req.body
+      payload
     );
     sendSuccess(res, { transaction }, 'Transaction updated');
   }

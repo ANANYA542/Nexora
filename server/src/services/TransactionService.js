@@ -1,5 +1,7 @@
 const transactionRepository = require('../repositories/TransactionRepository');
 const categoryRepository = require('../repositories/CategoryRepository');
+const notificationService = require('./NotificationService');
+const { getConvertedAmount } = require('../utils/currency');
 const AppError = require('../utils/AppError');
 
 
@@ -32,7 +34,7 @@ class TransactionService {
  
 
   async createTransaction(userId, body) {
-    const { category_id, type, amount, description, date } = body;
+    const { category_id, type, amount, currency = 'INR', description, date, receipt_url } = body;
 
     const category = await categoryRepository.findByIdForUser(category_id, userId);
     if (!category) {
@@ -46,7 +48,16 @@ class TransactionService {
       );
     }
 
-    return transactionRepository.create({ userId, category_id, type, amount, description, date });
+    const converted_amount = getConvertedAmount(amount, currency);
+
+    const transaction = await transactionRepository.create({ 
+      userId, category_id, type, amount, currency, converted_amount, description, date, receipt_url 
+    });
+
+    // Fire notification checks in the background (non-blocking)
+    notificationService.onTransactionCreated(userId, transaction).catch(() => {});
+
+    return transaction;
   }
 
   
@@ -72,6 +83,12 @@ class TransactionService {
           400
         );
       }
+    }
+
+    if (body.amount !== undefined || body.currency !== undefined) {
+      const amt = body.amount !== undefined ? body.amount : existing.amount;
+      const curr = body.currency !== undefined ? body.currency : existing.currency;
+      body.converted_amount = getConvertedAmount(amt, curr);
     }
 
     const updated = await transactionRepository.updateForUser(transactionId, userId, body);

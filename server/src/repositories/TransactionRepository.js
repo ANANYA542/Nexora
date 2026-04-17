@@ -34,7 +34,7 @@ class TransactionRepository {
    
     const dataQuery = `
       SELECT
-        t.id, t.type, t.amount, t.description, t.date, t.created_at,
+        t.id, t.type, t.amount, t.currency, t.converted_amount, t.description, t.date, t.receipt_url, t.created_at,
         c.id   AS category_id,
         c.name AS category_name,
         c.type AS category_type
@@ -78,19 +78,19 @@ class TransactionRepository {
   }
 
 
-  async create({ userId, category_id, type, amount, description, date }) {
+  async create({ userId, category_id, type, amount, currency, converted_amount, description, date, receipt_url }) {
     const { rows } = await pool.query(
-      `INSERT INTO transactions (user_id, category_id, type, amount, description, date)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO transactions (user_id, category_id, type, amount, currency, converted_amount, description, date, receipt_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
-      [userId, category_id, type, amount, description || null, date || 'today']
+      [userId, category_id, type, amount, currency, converted_amount, description || null, date || 'today', receipt_url || null]
     );
     return rows[0];
   }
 
  
   async updateForUser(transactionId, userId, fields) {
-    const allowed = ['category_id', 'type', 'amount', 'description', 'date'];
+    const allowed = ['category_id', 'type', 'amount', 'currency', 'converted_amount', 'description', 'date', 'receipt_url'];
     const setClauses = [];
     const params = [];
     let idx = 1;
