@@ -26,72 +26,24 @@ This is not just a CRUD application. It is a full financial intelligence platfor
 The monolithic backend strictly adheres to a Model-View-Controller (MVC) architecture, specifically utilizing the Controller-Service-Repository pattern. This separation of concerns ensures that routing, business logic, and database interactions are isolated, maximizing testability and preventing tightly coupled spaghetti code.
 
 ```mermaid
-graph TB
-    Client["🌐 Client Browser"]
+graph TD
+    Client["🌐 Client Browser"] --> API["Express.js API"]
     
-    subgraph Express["Express.js API Server"]
-        MW["Auth Middleware\n(JWT Verification)"]
-        ZOD["Zod Validation\nLayer"]
-        
-        subgraph Controllers["Controllers Layer"]
-            AC["AuthController"]
-            TC["TransactionController"]
-            BC["BudgetController"]
-            AIC["AIController"]
-            RC["ReportController"]
-        end
-        
-        subgraph Services["Services Layer (Business Logic)"]
-            AS["AuthService"]
-            TS["TransactionService"]
-            BS["BudgetService"]
-            AIS["AIService"]
-            ANS["AnomalyService"]
-            NS["NotificationService"]
-            RS["RecommendationService"]
-        end
-        
-        subgraph Repositories["Repository Layer (Data Access)"]
-            TR["TransactionRepository"]
-            UR["UserRepository"]
-            BR["BudgetRepository"]
-            CR["CategoryRepository"]
-        end
+    subgraph Backend Core
+        API --> Services["Services (Business Logic)"]
+        Services --> DB[("PostgreSQL")]
     end
     
-    subgraph External["External Services"]
-        PG[("PostgreSQL\nDatabase")]
-        REDIS[("Redis\nCloud")]
-        GROQ["Groq API\nLlama-3"]
-        SG["SendGrid\nEmail"]
-        GOOGLE["Google\nOAuth 2.0"]
-        STATIC["Local Disk\nReceipt Storage"]
+    subgraph Async Processing
+        Services --> Queue["Bull Job Queue"]
+        Queue --> Redis[("Redis")]
+        Queue --> Email["SendGrid"]
     end
     
-    subgraph Queue["Bull Job Queue"]
-        Q1["anomaly-alert"]
-        Q2["budget-overrun"]
-        Q3["daily-checks"]
-        Q4["weekly-summary"]
-        Q5["monthly-summary"]
-        Q6["weekly-recommendations"]
+    subgraph External
+        Services --> AI["Groq (Llama-3)"]
+        API --> Auth["Google OAuth"]
     end
-    
-    Client --> MW
-    MW --> ZOD
-    ZOD --> Controllers
-    Controllers --> Services
-    Services --> Repositories
-    Repositories --> PG
-    AIS --> GROQ
-    ANS --> GROQ
-    NS --> SG
-    AS --> GOOGLE
-    TS --> STATIC
-    Services --> Queue
-    Queue --> REDIS
-    Queue --> NS
-    Queue --> AIS
 ```
 
 Every layer has a single responsibility. Controllers never touch the database. Repositories never contain business logic. Services never directly send HTTP responses. This makes every component independently testable and replaceable.
@@ -104,68 +56,22 @@ The schema is fully normalized to 3NF. Financial amounts use NUMERIC(15,2) throu
 
 ```mermaid
 erDiagram
-    USERS {
-        serial id PK
-        varchar name
-        varchar email UK
-        varchar password_hash
-        varchar google_id
-        varchar preferred_currency
-        timestamp created_at
-    }
-    
-    CATEGORIES {
-        serial id PK
-        integer user_id FK
-        varchar name
-        varchar type
-        boolean is_deleted
-        timestamp created_at
-    }
-    
+    USERS ||--o{ TRANSACTIONS : "owns"
+    USERS ||--o{ BUDGETS : "sets"
+    CATEGORIES ||--o{ TRANSACTIONS : "tags"
+    CATEGORIES ||--o{ BUDGETS : "scoped to"
+
     TRANSACTIONS {
-        serial id PK
-        integer user_id FK
-        integer category_id FK
-        varchar type
         numeric amount
-        varchar currency
         numeric converted_amount
-        text description
-        date date
-        varchar receipt_url
         boolean is_anomaly
-        text anomaly_reason
-        timestamp created_at
     }
     
     BUDGETS {
-        serial id PK
-        integer user_id FK
-        integer category_id FK
         numeric monthly_limit
         integer month
         integer year
-        timestamp created_at
     }
-    
-    AI_RECOMMENDATIONS {
-        serial id PK
-        integer user_id FK
-        varchar type
-        varchar trigger_event
-        text recommendation_text
-        jsonb metadata
-        boolean is_read
-        timestamp created_at
-    }
-    
-    USERS ||--o{ CATEGORIES : "creates"
-    USERS ||--o{ TRANSACTIONS : "owns"
-    USERS ||--o{ BUDGETS : "sets"
-    USERS ||--o{ AI_RECOMMENDATIONS : "receives"
-    CATEGORIES ||--o{ TRANSACTIONS : "classifies"
-    CATEGORIES ||--o{ BUDGETS : "scoped to"
 ```
 
 | Decision | Implementation | Why |
@@ -185,62 +91,26 @@ The system supports two parallel authentication strategies — standard email/pa
 ```mermaid
 sequenceDiagram
     actor User
-    participant Client
-    participant AuthController
-    participant AuthService
-    participant UserRepository
-    participant Google
-    participant JWT
+    participant API as Express API
     participant DB as PostgreSQL
-
-    rect rgb(240, 248, 255)
-        Note over User,DB: Standard Registration Flow
-        User->>Client: Fill register form
-        Client->>AuthController: POST /api/auth/register
-        AuthController->>AuthService: register(name, email, password)
-        AuthService->>UserRepository: findByEmail(email)
-        UserRepository->>DB: SELECT WHERE email = ?
-        DB-->>UserRepository: null (not exists)
-        AuthService->>AuthService: bcrypt.hash(password, 12)
-        AuthService->>UserRepository: create(user)
-        UserRepository->>DB: INSERT INTO users
-        DB-->>AuthService: user object
-        AuthService->>JWT: sign({ id, email }, secret, 7d)
-        JWT-->>Client: { token, user }
-    end
-
-    rect rgb(240, 255, 240)
-        Note over User,DB: Google OAuth Flow
-        User->>Client: Click "Sign in with Google"
-        Client->>Google: Redirect to OAuth consent
-        Google-->>AuthController: GET /api/auth/google/callback?code=...
-        AuthController->>AuthService: handleGoogleCallback(profile)
-        AuthService->>UserRepository: findByGoogleId OR findByEmail
-        UserRepository->>DB: SELECT WHERE google_id = ? OR email = ?
-        alt User exists
-            DB-->>AuthService: existing user
-        else New user
-            AuthService->>UserRepository: create(googleUser)
-            UserRepository->>DB: INSERT INTO users
-        end
-        AuthService->>JWT: sign({ id, email }, secret, 7d)
-        JWT-->>Client: Redirect with token
-    end
-
-    rect rgb(255, 248, 240)
-        Note over User,DB: Protected Route Flow
-        User->>Client: Any protected action
-        Client->>AuthController: Request + Bearer token header
-        AuthController->>JWT: verify(token, secret)
-        alt Valid token
-            JWT-->>AuthController: { id, email, iat, exp }
-            AuthController->>UserRepository: findById(id)
-            UserRepository-->>AuthController: user object → req.user
-            AuthController->>AuthController: Proceed to route handler
-        else Invalid/Expired
-            JWT-->>Client: 401 Unauthorized
-        end
-    end
+    participant Google
+    
+    Note over User,DB: Standard Authentication
+    User->>API: POST /register (email, password)
+    API->>DB: Hash Password & Insert User
+    API-->>User: JWT Token
+    
+    Note over User,DB: Google OAuth 2.0
+    User->>Google: Authenticate Form
+    Google-->>API: Redirect with Profile Data
+    API->>DB: Upsert Google User ID
+    API-->>User: JWT Token
+    
+    Note over User,DB: Protected Route Execution
+    User->>API: Request + Bearer JWT
+    API->>API: Verify Token Signature
+    API->>DB: Fetch User Context
+    API-->>User: JSON Response
 ```
 
 | Scenario | Handling |
@@ -420,25 +290,15 @@ Utilizes `redis` to securely cache email payloads within `queue.add()` calls cle
 - Cron expressions survive server restarts unlike setInterval
 
 ```mermaid
-flowchart LR
-    A["Transaction\nSaved"] --> B{"Budget\nExceeded?"}
-    B -->|Yes| C["Add to\nBull Queue"]
-    B -->|No| D["Run Anomaly\nDetection"]
-    D --> E{"Anomaly\nDetected?"}
-    E -->|Yes| F["Add anomaly-alert\nto Queue"]
-    E -->|No| G["Done"]
-    C --> H["Redis\nPersistence"]
-    F --> H
-    H --> I["Bull Worker\nProcesses Job"]
-    I --> J{"Attempt\n1,2,3"}
-    J -->|Success| K["SendGrid\nEmail Sent"]
-    J -->|Fail| L["Exponential\nBackoff\n5s, 25s, 125s"]
-    L --> J
-
-    M["Cron: 0 9 * * *"] --> N["daily-checks"]
-    O["Cron: 0 9 * * MON"] --> P["weekly-summary"]
-    Q["Cron: 0 9 1 * *"] --> R["monthly-summary"]
-    N & P & R --> H
+flowchart TD
+    Tx["Transaction Created"] --> Check{"Budget Exceeded?"}
+    Check -->|Yes| Queue["Bull Background Queue"]
+    Check -->|No| Anomaly{"Anomaly Detected?"}
+    Anomaly -->|Yes| Queue
+    
+    Queue --> Redis[("Redis Cache")]
+    Redis --> Worker["Async Worker"]
+    Worker --> Email["SendGrid Email Dispatch"]
 ```
 
 **API endpoints:**
@@ -556,28 +416,17 @@ This was the most mathematically interesting problem in the assignment. Here is 
 
 ```mermaid
 flowchart TD
-    A["New Transaction Inserted"] --> B{"Category has\n>= 3 previous\ntransactions?"}
-    B -->|No| C["Skip — insufficient baseline\nNo false positives"]
-    B -->|Yes| D["Run SQL aggregation query\nPERCENTILE_CONT, AVG,\nSTDDEV, COUNT"]
+    NewTx["New Transaction"] --> Base{"Has >= 3 records?"}
+    Base -->|No| Skip["Skip (Prevents False Positives)"]
+    Base -->|Yes| Stats["Calculate SQL Aggregates"]
     
-    D --> E["Check 1: Z-Score\nzScore = amount - mean / stddev\nFlag if zScore > 2.5"]
-    D --> F["Check 2: IQR\niqr = Q3 - Q1\nFlag if amount > Q3 + 1.5×IQR"]
-    D --> G["Check 3: Rolling Avg\nFlag if amount > 3×\n30-day category average"]
+    Stats --> Z["Z-Score Analysis"]
+    Stats --> IQR["IQR Bounding"]
+    Stats --> Avg["30-Day Mean Tracker"]
     
-    E --> H{"Count flags\ntriggered"}
-    F --> H
-    G --> H
-    
-    H -->|"0 or 1 flag"| I["Not anomalous\nSingle check = could be\nlegitimate large purchase"]
-    H -->|"2 or 3 flags"| J["ANOMALY CONFIRMED\nConsensus detection"]
-    
-    J --> K["Update transaction\nis_anomaly = true\nanomaly_reason = AI explanation"]
-    K --> L["Add to Bull Queue\nanomaly-alert job"]
-    L --> M["SendGrid email\nwith AI explanation"]
-    K --> N["Save to\nai_recommendations table"]
-    
-    D --> O["Standalone: Duplicate Check\nSame amount + category\nwithin 48 hours?"]
-    O -->|Yes| P["Flag as duplicate\nindependently"]
+    Z & IQR & Avg --> Votes{"2+ Models Triggered?"}
+    Votes -->|Yes| Flag["Mark as True Anomaly"]
+    Flag --> Gen["AI Explains Reason"]
 ```
 
 | Method | Strength | Weakness | Why included |
@@ -597,15 +446,11 @@ A robust persistent intelligent feed fundamentally storing context exclusively s
 
 ```mermaid
 flowchart LR
-    E1["Budget Overrun\nEvent"] --> R["RecommendationService\n.generateAndSave()"]
-    E2["Anomaly Detected\nEvent"] --> R
-    E3["Bull Cron\nEvery Monday 8am"] --> R
-    
-    R --> CTX["buildFinancialContext()\n- Last 90 days transactions\n- All budgets + progress\n- Category breakdown\n- Monthly trend 6mo\n- Day-of-week pattern"]
-    CTX --> GROQ["Groq API\nLlama-3"]
-    GROQ --> SAVE["Save to\nai_recommendations\ntable"]
-    SAVE --> FEED["Paginated Insights\nFeed on Dashboard\n5 per page\nread/unread state"]
-    SAVE --> EMAIL["Weekly email\ndigest via\nSendGrid"]
+    Events["Trigger:\nAnomaly / Overrun / Cron"] --> Engine["Recommendation Engine"]
+    Engine --> AI["Groq Llama-3"]
+    AI --> Format["Format JSON insights"]
+    Format --> DB[("PostgreSQL")]
+    DB --> UI["Client Dashboard Feed"]
 ```
 
 > 📸 _Screenshot: Dedicated Paginated Insights Feed perfectly caching native recommendations_
@@ -748,11 +593,11 @@ CLIENT_URL=http://localhost:3000
 
 ## 9. Deployment
 
-Deployed securely robustly natively dynamically properly smoothly perfectly logically contextually explicitly cleanly practically successfully efficiently gracefully on Render. Production environment has:
+Deployed on Render. Production environment has:
 - Environment variables set via platform dashboard (never committed)
 - CORS restricted to production frontend origin only
 - Redis Cloud instance (ap-south-1 region for low latency)
-- PostgreSQL hosted on Render smoothly natively securely explicitly
+- PostgreSQL hosted natively
 
 **Live URL:** https://fj-be-r2-ananya-newton-school-of-n1t8.onrender.com/
 
