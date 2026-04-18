@@ -297,10 +297,17 @@ async function loadBudgetAllocation() {
       const spent = parseFloat(b.amount_spent);
       const pct = limit > 0 ? Math.min((spent / limit) * 100, 100) : 0;
       const overBudget = spent > limit;
+      
+      let catTag = b.category_name;
+      if (timeframe === 'all') {
+         const mName = new Date(b.year, b.month - 1, 1).toLocaleString('default', { month: 'short' });
+         catTag += ` <span style="font-size:11px; font-weight:normal; color:var(--text-muted);">(${mName} ${b.year})</span>`;
+      }
+      
       return `
         <li class="budget-bar-item">
           <div class="budget-bar-header">
-            <span>${b.category_name}</span>
+            <span>${catTag}</span>
             <span>${spent.toLocaleString(undefined, { minimumFractionDigits: 2 })} / ${limit.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
           </div>
           <div class="budget-track">
