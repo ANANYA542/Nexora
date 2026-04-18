@@ -1,9 +1,6 @@
 const budgetService = require('../services/BudgetService');
 const { sendSuccess } = require('../utils/response');
 
-/**
- * BudgetController — CRUD for budget entries.
- */
 class BudgetController {
   async getBudgets(req, res) {
     const budgets = await budgetService.getBudgets(req.user.id, req.query);

@@ -34,7 +34,7 @@ class TransactionRepository {
    
     const dataQuery = `
       SELECT
-        t.id, t.type, t.amount, t.currency, t.converted_amount, t.description, t.date, t.receipt_url, t.created_at,
+        t.id, t.type, t.amount, t.currency, t.converted_amount, t.description, TO_CHAR(t.date, 'YYYY-MM-DD') AS date, t.receipt_url, t.created_at,
         c.id   AS category_id,
         c.name AS category_name,
         c.type AS category_type
@@ -67,7 +67,9 @@ class TransactionRepository {
   
   async findByIdForUser(transactionId, userId) {
     const { rows } = await pool.query(
-      `SELECT t.*, c.name AS category_name
+      `SELECT
+         t.id, t.type, t.amount, t.currency, t.converted_amount, t.description, TO_CHAR(t.date, 'YYYY-MM-DD') AS date, t.receipt_url, t.created_at,
+         c.name AS category_name
        FROM transactions t
        JOIN categories c ON c.id = t.category_id
        WHERE t.id = $1 AND t.user_id = $2
@@ -77,12 +79,24 @@ class TransactionRepository {
     return rows[0] || null;
   }
 
+  async getBalanceForUser(userId) {
+    const { rows } = await pool.query(
+      `SELECT
+         COALESCE(SUM(CASE WHEN type = 'income' THEN converted_amount ELSE 0 END), 0)
+         - COALESCE(ABS(SUM(CASE WHEN type = 'expense' THEN converted_amount ELSE 0 END)), 0) AS balance
+       FROM transactions
+       WHERE user_id = $1`,
+      [userId]
+    );
+    return parseFloat(rows[0].balance);
+  }
+
 
   async create({ userId, category_id, type, amount, currency, converted_amount, description, date, receipt_url }) {
     const { rows } = await pool.query(
       `INSERT INTO transactions (user_id, category_id, type, amount, currency, converted_amount, description, date, receipt_url)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-       RETURNING *`,
+       RETURNING id, user_id, category_id, type, amount, currency, converted_amount, description, TO_CHAR(date, 'YYYY-MM-DD') AS date, receipt_url, created_at`,
       [userId, category_id, type, amount, currency, converted_amount, description || null, date || 'today', receipt_url || null]
     );
     return rows[0];
@@ -110,7 +124,7 @@ class TransactionRepository {
       `UPDATE transactions
        SET ${setClauses.join(', ')}
        WHERE id = $${idx} AND user_id = $${idx + 1}
-       RETURNING *`,
+       RETURNING id, user_id, category_id, type, amount, currency, converted_amount, description, TO_CHAR(date, 'YYYY-MM-DD') AS date, receipt_url, created_at`,
       params
     );
     return rows[0] || null;
@@ -121,7 +135,7 @@ class TransactionRepository {
     const { rows } = await pool.query(
       `DELETE FROM transactions
        WHERE id = $1 AND user_id = $2
-       RETURNING *`,
+       RETURNING id, user_id, category_id, type, amount, currency, converted_amount, description, TO_CHAR(date, 'YYYY-MM-DD') AS date, receipt_url, created_at`,
       [transactionId, userId]
     );
     return rows[0] || null;

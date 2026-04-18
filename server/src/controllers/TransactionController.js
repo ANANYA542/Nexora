@@ -22,6 +22,11 @@ class TransactionController {
     sendSuccess(res, { transaction }, 'Transaction created', 201);
   }
 
+  async checkBalance(req, res) {
+    const balance = await transactionService.checkBalance(req.user.id, req.body);
+    sendSuccess(res, { balance });
+  }
+
   async updateTransaction(req, res) {
     const payload = { ...req.body };
     if (req.file) {
