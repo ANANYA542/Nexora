@@ -211,10 +211,13 @@ Utilizes the `UserRepository` to isolate raw SQL bindings, parsing business logi
 | POST | /api/auth/register | No | Creates a new secure user record |
 | POST | /api/auth/login | No | Validates credentials and maps to JWT |
 | GET | /api/auth/me | Yes | Retrieves current user profile |
-REGISTER TEST
-> [api_testing_Screenshots/postman_register.png]
-LOGIN TEST
-> [api_testing_Screenshots/postman_login.png]
+<details>
+<summary><b>View Postman Authentication Tests</b></summary>
+<br>
+<img src="./api_testing_Screenshots/register.png" width="600" alt="Register API Test">
+<br><br>
+<img src="./api_testing_Screenshots/login.png" width="600" alt="Login API Test">
+</details>
 
 
 ### 4.2 Database Structure & Models
@@ -259,10 +262,15 @@ Endpoints intercept the `TransactionService` to enforce balance guarding and tri
 | GET | /api/transactions | Yes | Fetches securely paginated transactions |
 
 
-POSTMAN TESTING FOR TRANSACTION MANAGEMENT
-> [api_testing_Screenshots/post_expense_transaction.png]
->   [api_testing_Screenshots/post_income_transaction.png]
->   [api_testing_Screenshots/get_transaction.png]
+<details>
+<summary><b>View Postman Transaction Tests</b></summary>
+<br>
+<img src="./api_testing_Screenshots/post_expense_transaction.png" width="600" alt="Post Expense Transaction">
+<br><br>
+<img src="./api_testing_Screenshots/post_income_transaction.png" width="600" alt="Post Income Transaction">
+<br><br>
+<img src="./api_testing_Screenshots/get_Transaction.png" width="600" alt="Get Transactions">
+</details>
 
 ### 4.4 Dashboard
 **Rubric mapping:** user experience, functionality
@@ -282,8 +290,11 @@ Leverages raw SQL `SUM` and `COALESCE` statements natively inside `DashboardRepo
 |---|---|---|---|
 | GET | /api/dashboard | Yes | Emits real-time native SQL aggregates |
 
-POSTMAN TESTING FOR DASHBOARD
->[api_testing_Screenshots/dashboard.png]
+<details>
+<summary><b>View Postman Dashboard Test</b></summary>
+<br>
+<img src="./api_testing_Screenshots/dashoard.png" width="600" alt="Dashboard Aggregation API">
+</details>
 
 ### 4.5 Reporting
 **Rubric mapping:** functionality, logic
@@ -302,8 +313,11 @@ Implemented entirely via SQL `GROUP BY EXTRACT(MONTH/YEAR)` constraints inside `
 |---|---|---|---|
 | GET | /api/reports/monthly | Yes | Emits rigid structural month clusters |
 
-POSTMAN TESTING FOR REPORTING
->[api_testing_Screenshots/get_monthly_report.png]
+<details>
+<summary><b>View Postman Reporting Test</b></summary>
+<br>
+<img src="./api_testing_Screenshots/get_monthly_report.png" width="600" alt="Monthly Reporting API">
+</details>
 
 ### 4.6 Budgeting
 **Rubric mapping:** functionality, logic, user experience
@@ -324,11 +338,15 @@ The `BudgetService` validates UPSERT constraints cleanly directly against Postgr
 | POST | /api/budgets | Yes | Registers hard spending thresholds |
 | GET | /api/budgets | Yes | Calculates explicit limit vs expenditure ratios |
 
-> POSTMAN TESTING FOR BUDGETING
->[api_testing_Screenshots/set_budget.png]
->[api_testing_Screenshots/get_budget.png]
-
->[api_testing_Screenshots/delete_budget.png]
+<details>
+<summary><b>View Postman Budget Tests</b></summary>
+<br>
+<img src="./api_testing_Screenshots/set_budget.png" width="600" alt="Set Budget API">
+<br><br>
+<img src="./api_testing_Screenshots/get_budget.png" width="600" alt="Get Budgets API">
+<br><br>
+<img src="./api_testing_Screenshots/delete_budget.png" width="600" alt="Delete Budget API">
+</details>
 
 
 
