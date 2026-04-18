@@ -62,7 +62,7 @@
         <div class="health-badges">
           <span class="badge" id="badgeSavings">Savings: --</span>
           <span class="badge" id="badgeBudgets">Budgets: --</span>
-          <span class="badge" id="badgeAnomalies">Anomalies: --</span>
+          <span class="badge" id="badgeAnomalies" style="cursor:pointer;" onclick="scrollToAnomalyFeed()">Anomalies: --</span>
           <span class="badge" id="badgeIncome">Income Sources: --</span>
         </div>
       </div>
@@ -196,6 +196,19 @@
       </div>
     </div>
 
+    <!-- LEVEL 4b: Budget vs Spending grouped bar chart -->
+    <div class="card" style="margin-top: 24px;">
+      <h3 class="widget-title" style="margin-bottom:4px;">Budget vs Spending by Category</h3>
+      <div id="budgetChartStatus" style="font-size:13px; color:var(--text-muted); min-height:18px; margin-bottom:8px;"></div>
+      <div style="position:relative; height:280px;">
+        <canvas id="budgetVsSpendingChart" style="width:100%; height:280px;"></canvas>
+      </div>
+      <div id="budgetChartLegend" style="display:flex; gap:20px; margin-top:10px; font-size:12px; color:var(--text-muted);">
+        <span><span style="display:inline-block;width:12px;height:12px;border-radius:2px;background:#18221f;vertical-align:middle;margin-right:4px;"></span>Spent</span>
+        <span><span style="display:inline-block;width:12px;height:12px;border-radius:2px;background:#c5c5c5;vertical-align:middle;margin-right:4px;"></span>Budget Limit</span>
+      </div>
+    </div>
+
     <!-- LEVEL 5: Widgets & Transactions -->
     <div class="widget-grid" style="margin-top: 24px;">
       <div>
@@ -245,6 +258,209 @@
   <script src="js/api.js"></script>
   <script src="js/notifications.js"></script>
   <script src="js/dashboard.js"></script>
+  <script>
+    // FIX 1: When timeframe changes, also reload budget allocation block
+    (function patchTimeframeForBudget() {
+      const sel = document.getElementById('dashboardTimeframe');
+      if (!sel) return;
+      const orig = sel.getAttribute('onchange') || '';
+      sel.setAttribute('onchange', orig + '; if(typeof loadBudgetAllocation === "function") loadBudgetAllocation();');
+    })();
+
+    // FIX 2: Budget vs Spending grouped bar chart
+    let _budgetChartInstance = null;
+
+    function renderBudgetVsSpendingChart(budgets, spentMap) {
+      const canvas = document.getElementById('budgetVsSpendingChart');
+      const statusEl = document.getElementById('budgetChartStatus');
+      const legendEl = document.getElementById('budgetChartLegend');
+      if (!canvas) return;
+
+      // Merge data: budgets have limit; spentMap[category_name] = amount_spent
+      // Also include categories that have spending but no budget
+      const allCats = {};
+      budgets.forEach(b => {
+        allCats[b.category_name] = allCats[b.category_name] || { spent: 0, limit: 0 };
+        allCats[b.category_name].limit = parseFloat(b.limit_amount) || 0;
+        allCats[b.category_name].spent = parseFloat(b.amount_spent) || 0;
+      });
+      // spentMap from transaction category totals fills gaps
+      if (spentMap) {
+        Object.keys(spentMap).forEach(cat => {
+          if (!allCats[cat]) allCats[cat] = { spent: spentMap[cat], limit: 0 };
+        });
+      }
+
+      const labels = Object.keys(allCats);
+      if (labels.length === 0) {
+        statusEl.textContent = 'No data for this period';
+        legendEl.style.display = 'none';
+        canvas.style.display = 'none';
+        return;
+      }
+      statusEl.textContent = '';
+      legendEl.style.display = 'flex';
+      canvas.style.display = 'block';
+
+      const dpr = window.devicePixelRatio || 1;
+      const containerW = canvas.parentElement.clientWidth || 600;
+      const containerH = 280;
+      canvas.width = containerW * dpr;
+      canvas.height = containerH * dpr;
+      canvas.style.width = containerW + 'px';
+      canvas.style.height = containerH + 'px';
+
+      const ctx = canvas.getContext('2d');
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, containerW, containerH);
+
+      const pad = { top: 24, right: 20, bottom: 54, left: 60 };
+      const chartW = containerW - pad.left - pad.right;
+      const chartH = containerH - pad.top - pad.bottom;
+
+      const allVals = labels.flatMap(l => [allCats[l].spent, allCats[l].limit]);
+      const maxVal = Math.max(...allVals, 1);
+
+      // Y grid lines
+      ctx.strokeStyle = '#e8e8e8';
+      ctx.lineWidth = 0.5;
+      const gridLines = 4;
+      for (let i = 0; i <= gridLines; i++) {
+        const y = pad.top + (chartH / gridLines) * i;
+        ctx.beginPath();
+        ctx.moveTo(pad.left, y);
+        ctx.lineTo(pad.left + chartW, y);
+        ctx.stroke();
+        const val = maxVal - (maxVal / gridLines) * i;
+        ctx.fillStyle = '#999';
+        ctx.font = '10px Inter, system-ui, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText(val >= 1000 ? (val / 1000).toFixed(1) + 'k' : val.toFixed(0), pad.left - 6, y + 3);
+      }
+
+      const groupW = Math.max(30, Math.min(80, chartW / labels.length));
+      const barW = Math.max(8, (groupW - 12) / 2);
+      const groupGap = (chartW - groupW * labels.length) / (labels.length + 1);
+
+      labels.forEach((cat, i) => {
+        const { spent, limit } = allCats[cat];
+        const groupX = pad.left + groupGap * (i + 1) + groupW * i;
+
+        // Spent bar color
+        let spentColor = '#22c55e'; // green
+        if (limit > 0) {
+          if (spent > limit) spentColor = '#dc2626';         // red
+          else if (spent > limit * 0.8) spentColor = '#f59e0b'; // amber
+        }
+
+        // Draw spent bar
+        const spentH = (spent / maxVal) * chartH;
+        const spentY = pad.top + chartH - spentH;
+        ctx.fillStyle = spentColor;
+        ctx.beginPath();
+        ctx.roundRect ? ctx.roundRect(groupX, spentY, barW, spentH, [3, 3, 0, 0])
+          : (() => { ctx.rect(groupX, spentY, barW, spentH); })();
+        ctx.fill();
+
+        // Draw limit bar (only if there's a budget)
+        if (limit > 0) {
+          const limitH = (limit / maxVal) * chartH;
+          const limitY = pad.top + chartH - limitH;
+          ctx.fillStyle = '#c5c5c5';
+          ctx.beginPath();
+          ctx.roundRect ? ctx.roundRect(groupX + barW + 4, limitY, barW, limitH, [3, 3, 0, 0])
+            : (() => { ctx.rect(groupX + barW + 4, limitY, barW, limitH); })();
+          ctx.fill();
+        }
+
+        // X label
+        const labelX = groupX + barW + (limit > 0 ? barW / 2 + 2 : 0);
+        ctx.fillStyle = '#666';
+        ctx.font = '10px Inter, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.save();
+        ctx.translate(labelX, pad.top + chartH + 10);
+        ctx.rotate(-0.42);
+        ctx.textAlign = 'right';
+        const shortCat = cat.length > 10 ? cat.slice(0, 9) + '...' : cat;
+        ctx.fillText(shortCat, 0, 0);
+        ctx.restore();
+      });
+    }
+
+    async function loadBudgetVsSpendingChart() {
+      const statusEl = document.getElementById('budgetChartStatus');
+      const canvas = document.getElementById('budgetVsSpendingChart');
+      const legendEl = document.getElementById('budgetChartLegend');
+      if (!statusEl || !canvas) return;
+
+      statusEl.textContent = 'Loading...';
+      canvas.style.display = 'none';
+      legendEl.style.display = 'none';
+
+      try {
+        const tfEl = document.getElementById('dashboardTimeframe');
+        const timeframe = tfEl ? tfEl.value : 'all';
+        const year = new Date().getFullYear();
+
+        let budgetEndpoint = '/budgets';
+        if (timeframe !== 'all') {
+          budgetEndpoint += `?month=${timeframe}&year=${year}`;
+        }
+
+        const res = await apiCall(budgetEndpoint);
+        const budgets = (res.data && res.data.budgets) ? res.data.budgets : [];
+
+        // Build spentMap from budget data (amount_spent already per category)
+        renderBudgetVsSpendingChart(budgets, null);
+      } catch (err) {
+        if (statusEl) statusEl.textContent = 'Could not load chart data.';
+      }
+    }
+
+    // Hook into loadDashboard completion by polling for localBudgetData
+    // and re-rendering chart when timeframe changes
+    (function patchTimeframeForChart() {
+      const sel = document.getElementById('dashboardTimeframe');
+      if (!sel) return;
+      const existing = sel.getAttribute('onchange') || '';
+      if (!existing.includes('loadBudgetVsSpendingChart')) {
+        sel.setAttribute('onchange', existing + '; loadBudgetVsSpendingChart();');
+      }
+    })();
+
+    // Initial chart load after page scripts run
+    window.addEventListener('load', function() {
+      setTimeout(loadBudgetVsSpendingChart, 800);
+    });
+
+    // FIX 3: Anomaly label tooltip — mobile tap toggle
+    document.addEventListener('click', function(e) {
+      if (e.target.classList.contains('tx-anomaly-label')) {
+        e.target.classList.toggle('tooltip-visible');
+      } else {
+        document.querySelectorAll('.tx-anomaly-label.tooltip-visible').forEach(el => {
+          el.classList.remove('tooltip-visible');
+        });
+      }
+    });
+
+    // FIX 3: Anomaly pill click — scroll to Insights Feed and switch to Anomaly filter
+    function scrollToAnomalyFeed() {
+      // Switch AI tab to Tab 1 (Insights Feed)
+      if (typeof switchAITab === 'function') switchAITab(1);
+      // Activate Anomaly filter pill
+      const anomalyPill = document.querySelector('.pill-btn[data-filter="anomaly"]');
+      if (anomalyPill && typeof setAIFilter === 'function') {
+        setAIFilter(anomalyPill);
+      }
+      // Scroll to insights hub
+      const hub = document.querySelector('.ai-tabs');
+      if (hub) {
+        hub.closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+  </script>
   <style>
     /* Global Styles injected safely */
     .skeleton {
@@ -335,10 +551,38 @@
     @keyframes blink { 0% {opacity:.2;} 20% {opacity:1;} 100% {opacity:.2;} }
 
     /* Transactions Anomaly */
-    .row-anomaly { background: rgba(178, 74, 58, 0.04); position:relative;}
-    .anomaly-icon { cursor:help; margin-right:4px; position:relative; display:inline-block; color:#b24a3a; font-weight:bold;}
-    .anomaly-tooltip { visibility:hidden; position:absolute; bottom:100%; left:0; width:250px; background:var(--brand-dark); color:#fff; font-size:12px; padding:8px; border-radius:6px; z-index:10; white-space:normal; box-shadow:0 2px 4px rgba(0,0,0,0.2); font-weight:normal;}
-    .anomaly-icon:hover .anomaly-tooltip { visibility:visible; }
+    .row-anomaly { background: rgba(220, 38, 38, 0.04); }
+    .tx-anomaly-label {
+      display: inline-block;
+      font-size: 11px;
+      color: #dc2626;
+      margin-top: 3px;
+      cursor: default;
+      position: relative;
+    }
+    .tx-anomaly-label::after {
+      content: attr(data-reason);
+      display: none;
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 0;
+      max-width: 260px;
+      width: max-content;
+      background: #1a1a1a;
+      color: #ffffff;
+      font-size: 12px;
+      padding: 7px 10px;
+      border-radius: 6px;
+      white-space: normal;
+      z-index: 100;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+      pointer-events: none;
+      line-height: 1.5;
+    }
+    .tx-anomaly-label:hover::after,
+    .tx-anomaly-label.tooltip-visible::after { display: block; }
+    /* Anomaly pill clickable */
+    #badgeAnomalies:hover { text-decoration: underline; }
 
     @media (max-width: 600px) {
       .health-badges { display:grid; grid-template-columns: 1fr 1fr; width:100%; }

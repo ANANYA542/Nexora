@@ -244,18 +244,26 @@ async function loadRecentTransactions(page = 1) {
     tbody.innerHTML = txns.map((t) => {
       const isAnom = t.is_anomaly;
       const amountFmt = parseFloat(t.amount).toLocaleString(undefined, { minimumFractionDigits: 2 }) + ' ' + t.currency;
-      const desc = isAnom ? `<span class="anomaly-icon">! <span class="anomaly-tooltip">${t.anomaly_reason || 'Anomaly detected'}</span></span>${t.description}` : t.description;
       const color = t.type === 'income' ? '#5a8a7a' : '#121212';
-      
+      const descText = t.description || '-';
+      const anomalyLabel = isAnom
+        ? `<span class="tx-anomaly-label" data-reason="${(t.anomaly_reason || 'Anomaly detected').replace(/"/g, '&quot;')}">Anomaly</span>`
+        : '';
+
       return `
         <tr class="${isAnom ? 'row-anomaly' : ''}">
           <td>${t.date ? t.date.split('T')[0] : '-'}</td>
-          <td><strong>${desc || '-'}</strong><br><span class="muted-inline" style="font-size:11px; text-transform:uppercase">${t.type}</span></td>
+          <td>
+            <strong>${descText}</strong>
+            <br><span class="muted-inline" style="font-size:11px; text-transform:uppercase">${t.type}</span>
+            ${anomalyLabel}
+          </td>
           <td>${t.category_name || '-'}</td>
           <td style="color:${color}; font-weight:600;">${t.type === 'income' ? '+' : '-'}${amountFmt}</td>
         </tr>
       `;
     }).join('');
+
     
     const startIdx = ((pag.page - 1) * pag.limit) + 1;
     const endIdx = Math.min(pag.page * pag.limit, pag.total);
