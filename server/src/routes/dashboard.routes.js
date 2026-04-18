@@ -7,8 +7,6 @@ const { dashboardQuerySchema } = require('../validations/schemas');
 const router = Router();
 
 router.use(authenticate);
-
-
 router.get(
   '/',
   validate(dashboardQuerySchema, 'query'),

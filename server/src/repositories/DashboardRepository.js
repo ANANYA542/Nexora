@@ -87,7 +87,7 @@ class DashboardRepository {
 
     const { rows } = await pool.query(
       `SELECT
-         date,
+         TO_CHAR(date, 'YYYY-MM-DD') AS date,
          ABS(SUM(converted_amount)) AS total_expense
        FROM transactions
        WHERE ${where}
@@ -110,7 +110,7 @@ class DashboardRepository {
 
     const { rows } = await pool.query(
       `SELECT
-         date,
+         TO_CHAR(date, 'YYYY-MM-DD') AS date,
          ABS(SUM(converted_amount)) AS total_expense
        FROM transactions
        WHERE ${where}

@@ -7,8 +7,6 @@ const { reportQuerySchema } = require('../validations/schemas');
 const router = Router();
 
 router.use(authenticate);
-
-
 router.get(
   '/monthly',
   validate(reportQuerySchema, 'query'),
