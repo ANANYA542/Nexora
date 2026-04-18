@@ -412,7 +412,7 @@ class NotificationService {
   }
   async sendPasswordResetLink(user, token) {
     const subject = 'Password Reset Request';
-    const resetUrl = `http://localhost:5500/reset-password.html?token=${token}`;
+    const resetUrl = `${process.env.CLIENT_URL || 'http://localhost:5500'}/reset-password.html?token=${token}`;
     await this._sendNotification(user, 'password_reset_link', {
       subject,
       title: 'Reset Your Password',

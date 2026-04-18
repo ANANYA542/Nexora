@@ -41,7 +41,7 @@ function renderTransactions() {
         <td><strong>${transaction.description || '-'}</strong><br><span class="muted-inline">${transaction.type}</span></td>
         <td>${transaction.category_name || '-'}</td>
         <td>${formatTransactionAmount(transaction)}</td>
-        <td>${transaction.receipt_url ? `<a href="http://localhost:5003${transaction.receipt_url}" target="_blank">View</a>` : '-'}</td>
+        <td>${transaction.receipt_url ? `<a href="${API_BASE.replace('/api', '')}${transaction.receipt_url}" target="_blank">View</a>` : '-'}</td>
         <td>
           <div class="table-actions">
             <button type="button" class="secondary small" onclick="editTransaction('${transaction.id}')">Edit</button>
