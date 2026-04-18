@@ -6,6 +6,7 @@ const router = Router();
 
 router.use(authenticate);
 
+router.get('/', (req, res) => notificationController.getLatest(req, res));
 router.post('/trigger/daily',   (req, res) => notificationController.triggerDailyChecks(req, res));
 router.post('/trigger/weekly',  (req, res) => notificationController.triggerWeeklySummary(req, res));
 router.post('/trigger/monthly', (req, res) => notificationController.triggerMonthlySummary(req, res));

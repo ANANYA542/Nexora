@@ -7,34 +7,38 @@ const BUDGET_WARNING_PERCENT = 0.8;
 const INACTIVITY_DAYS = 7;
 const LOW_SAVINGS_THRESHOLD = 1000;
 
+function formatCurrency(value) {
+  return `INR ${parseFloat(value).toFixed(2)}`;
+}
+
 class NotificationService {
-
-
   async onTransactionCreated(userId, transaction) {
     const user = await userRepository.findById(userId);
     if (!user) return;
 
     if (transaction.type === 'expense') {
       await this._checkBudgetAlerts(user, transaction);
-      await this._checkSpendingSpike(user);
-      await this._checkHighestSpendingDay(user);
+      await this._checkSpendingSpike(user, transaction);
+      await this._checkHighestSpendingDay(user, transaction);
       await this._checkCategorySpike(user, transaction.category_id);
       await this._checkBudgetNotSet(user, transaction.category_id);
 
       if (parseFloat(transaction.amount) < 0) {
-        await this._sendNotification(user, 'refund_alert',
-          'Refund Detected',
-          `<p>A refund of <strong>₹${Math.abs(transaction.amount)}</strong> was recorded.</p>
-           <p>Description: ${transaction.description || 'N/A'}</p>`
-        );
+        await this._sendNotification(user, 'refund_alert', {
+          subject: 'Notification',
+          title: 'Refund Recorded',
+          intro: 'A refund transaction has been recorded on your account.',
+          content: `<p style="margin:0 0 12px;">Description: <strong>${transaction.description || 'N/A'}</strong></p>`,
+          highlightTitle: 'Refund Details',
+          highlightContent: `<div>Amount: <strong>${formatCurrency(Math.abs(transaction.amount))}</strong></div>`,
+          logMessage: 'Refund recorded',
+        });
       }
     }
 
     await this._checkLowSavings(user);
     await this._checkNoIncome(user);
   }
-
-  // --- SCHEDULED NOTIFICATIONS (called by scheduler) ---
 
   async runDailyChecks() {
     const users = await notificationRepo.getAllUserIds();
@@ -49,14 +53,19 @@ class NotificationService {
     const users = await notificationRepo.getAllUserIds();
     for (const user of users) {
       const summary = await notificationRepo.getWeeklySummary(user.id);
-      await this._sendNotification(user, 'weekly_summary',
-        'Weekly Spending Summary',
-        `<h3>Your Week in Review</h3>
-         <p>💵 Income: <strong>₹${summary.income.toFixed(2)}</strong></p>
-         <p>💸 Expenses: <strong>₹${summary.expense.toFixed(2)}</strong></p>
-         <p>🏦 Savings: <strong>₹${summary.savings.toFixed(2)}</strong></p>
-         <p>📊 Transactions: <strong>${summary.transaction_count}</strong></p>`
-      );
+      await this._sendNotification(user, 'weekly_summary', {
+        subject: 'Weekly Spending Summary',
+        title: 'Weekly Spending Summary',
+        intro: 'Here is your weekly financial summary from Finance Tracker.',
+        highlightTitle: 'This Week',
+        highlightContent: `
+          <div>Income: <strong>${formatCurrency(summary.income)}</strong></div>
+          <div>Expenses: <strong>${formatCurrency(summary.expense)}</strong></div>
+          <div>Savings: <strong>${formatCurrency(summary.savings)}</strong></div>
+          <div>Transactions: <strong>${summary.transaction_count}</strong></div>
+        `,
+        logMessage: 'Weekly spending summary sent',
+      });
     }
   }
 
@@ -64,13 +73,19 @@ class NotificationService {
     const users = await notificationRepo.getAllUserIds();
     for (const user of users) {
       const summary = await notificationRepo.getCurrentMonthSummary(user.id);
-      await this._sendNotification(user, 'monthly_summary',
-        'Monthly Financial Summary',
-        `<h3>Monthly Report</h3>
-         <p>💵 Total Income: <strong>₹${summary.income.toFixed(2)}</strong></p>
-         <p>💸 Total Expenses: <strong>₹${summary.expense.toFixed(2)}</strong></p>
-         <p>🏦 Net Savings: <strong>₹${summary.savings.toFixed(2)}</strong></p>`
-      );
+      await this._sendNotification(user, 'monthly_summary', {
+        subject: 'Monthly Spending Summary',
+        title: 'Monthly Spending Summary',
+        intro: 'Your monthly financial summary is ready.',
+        content: '<p style="margin:0;">These values are based on your recorded transactions and backend calculations.</p>',
+        highlightTitle: 'Monthly Overview',
+        highlightContent: `
+          <div>Income: <strong>${formatCurrency(summary.income)}</strong></div>
+          <div>Expenses: <strong>${formatCurrency(summary.expense)}</strong></div>
+          <div>Savings: <strong>${formatCurrency(summary.savings)}</strong></div>
+        `,
+        logMessage: 'Monthly spending summary sent',
+      });
     }
   }
 
@@ -79,81 +94,112 @@ class NotificationService {
     for (const user of users) {
       const budgets = await notificationRepo.getBudgetsForCurrentMonth(user.id);
       if (budgets.length === 0) {
-        await this._sendNotification(user, 'budget_reminder',
-          'Set Your Budgets for This Month',
-          `<p>A new month has started! 🗓️</p>
-           <p>You haven't set any budgets yet. Set your budgets now to stay on track.</p>`
-        );
+        await this._sendNotification(user, 'budget_reminder', {
+          subject: 'Notification',
+          title: 'Budget Reminder',
+          intro: 'A new month has started and no budgets are currently set.',
+          content: '<p style="margin:0;">Set category budgets to keep your spending aligned with your financial goals.</p>',
+          highlightTitle: 'Recommended Action',
+          highlightContent: 'Add monthly budgets for your main expense categories in Finance Tracker.',
+          logMessage: 'Budget reminder sent',
+        });
       }
     }
   }
 
-  // --- RECEIPT UPLOAD NOTIFICATION ---
-
   async onReceiptUploaded(userId, transactionDescription) {
     const user = await userRepository.findById(userId);
     if (!user) return;
-    await this._sendNotification(user, 'receipt_uploaded',
-      'Receipt Uploaded Successfully',
-      `<p>Your receipt for "<strong>${transactionDescription}</strong>" has been uploaded. ✅</p>`
-    );
+    await this._sendNotification(user, 'receipt_uploaded', {
+      subject: 'Notification',
+      title: 'Receipt Uploaded',
+      intro: 'A receipt has been successfully attached to one of your transactions.',
+      highlightTitle: 'Receipt Reference',
+      highlightContent: `<div>Description: <strong>${transactionDescription}</strong></div>`,
+      logMessage: 'Receipt uploaded successfully',
+    });
   }
-
-  // --- INTERNAL CHECK METHODS ---
 
   async _checkBudgetAlerts(user, transaction) {
     const budgets = await notificationRepo.getBudgetsForCurrentMonth(user.id);
-    const budget = budgets.find(b => b.category_id === transaction.category_id);
+    const budget = budgets.find((item) => item.category_id === transaction.category_id);
     if (!budget) return;
 
     const spent = parseFloat(budget.amount_spent);
     const limit = parseFloat(budget.limit_amount);
 
     if (spent > limit) {
-      await this._sendNotification(user, 'budget_exceeded',
-        `Budget Exceeded — ${budget.category_name}`,
-        `<p>⚠️ You have exceeded your budget for <strong>${budget.category_name}</strong>.</p>
-         <p>Budget: ₹${limit.toFixed(2)} | Spent: ₹${spent.toFixed(2)}</p>`
-      );
+      await this._sendNotification(user, 'budget_exceeded', {
+        subject: 'Budget Alert',
+        title: 'Budget Exceeded',
+        intro: `Your spending in ${budget.category_name} has exceeded the monthly budget.`,
+        content: '<p style="margin:0;">Review this category to avoid overspending for the rest of the month.</p>',
+        highlightTitle: budget.category_name,
+        highlightContent: `
+          <div>Budget: <strong>${formatCurrency(limit)}</strong></div>
+          <div>Spent: <strong>${formatCurrency(spent)}</strong></div>
+        `,
+        logMessage: `Budget exceeded for ${budget.category_name}`,
+      });
     } else if (spent >= limit * BUDGET_WARNING_PERCENT) {
-      await this._sendNotification(user, 'budget_near_limit',
-        `Near Budget Limit — ${budget.category_name}`,
-        `<p>⚡ You've used ${Math.round((spent / limit) * 100)}% of your budget for <strong>${budget.category_name}</strong>.</p>
-         <p>Budget: ₹${limit.toFixed(2)} | Spent: ₹${spent.toFixed(2)}</p>`
-      );
+      await this._sendNotification(user, 'budget_near_limit', {
+        subject: 'Budget Alert',
+        title: 'Budget Near Limit',
+        intro: `Your spending in ${budget.category_name} is approaching the budget limit.`,
+        highlightTitle: budget.category_name,
+        highlightContent: `
+          <div>Usage: <strong>${Math.round((spent / limit) * 100)}%</strong></div>
+          <div>Budget: <strong>${formatCurrency(limit)}</strong></div>
+          <div>Spent: <strong>${formatCurrency(spent)}</strong></div>
+        `,
+        logMessage: `Budget near limit for ${budget.category_name}`,
+      });
     }
   }
 
-  async _checkSpendingSpike(user) {
-    const alreadySent = await notificationRepo.wasNotificationSentToday(user.id, 'spending_spike');
+  async _checkSpendingSpike(user, transaction) {
+    const txDate = transaction.date ? new Date(transaction.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+    const alreadySent = await notificationRepo.wasNotificationSentOnDate(user.id, 'spending_spike', txDate);
     if (alreadySent) return;
 
     const avgDaily = await notificationRepo.getAverageDailyExpense(user.id);
-    const todayExpense = await notificationRepo.getTodayExpense(user.id);
+    const dayExpense = await notificationRepo.getExpenseForDate(user.id, txDate);
 
-    if (avgDaily > 0 && todayExpense > avgDaily * SPIKE_THRESHOLD) {
-      await this._sendNotification(user, 'spending_spike',
-        'Unusual Spending Spike Detected',
-        `<p>📈 Today's spending <strong>₹${todayExpense.toFixed(2)}</strong> is significantly higher than your daily average of <strong>₹${avgDaily.toFixed(2)}</strong>.</p>`
-      );
+    if (avgDaily > 0 && dayExpense > avgDaily * SPIKE_THRESHOLD) {
+      await this._sendNotification(user, 'spending_spike', {
+        subject: 'Notification',
+        title: 'Spending Spike Detected',
+        intro: `Your expense total for ${txDate} is significantly above your recent daily average.`,
+        highlightTitle: 'Comparison',
+        highlightContent: `
+          <div>Date: <strong>${txDate}</strong></div>
+          <div>Expenses: <strong>${formatCurrency(dayExpense)}</strong></div>
+          <div>Average Daily Expense: <strong>${formatCurrency(avgDaily)}</strong></div>
+        `,
+        logMessage: `Spending spike detected for ${txDate}`,
+      });
     }
   }
 
-  async _checkHighestSpendingDay(user) {
+  async _checkHighestSpendingDay(user, transaction) {
     const highest = await notificationRepo.getHighestSpendingDay(user.id);
     if (!highest) return;
 
-    const todayExpense = await notificationRepo.getTodayExpense(user.id);
-    const today = new Date().toISOString().split('T')[0];
+    const txDate = transaction.date ? new Date(transaction.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+    const dayExpense = await notificationRepo.getExpenseForDate(user.id, txDate);
 
-    if (highest.date === today && todayExpense >= parseFloat(highest.total)) {
-      const alreadySent = await notificationRepo.wasNotificationSentToday(user.id, 'highest_spending_day');
+    if (new Date(highest.date).toISOString().split('T')[0] === txDate && dayExpense >= parseFloat(highest.total)) {
+      const alreadySent = await notificationRepo.wasNotificationSentOnDate(user.id, 'highest_spending_day', txDate);
       if (alreadySent) return;
 
-      await this._sendNotification(user, 'highest_spending_day',
-        'New Highest Spending Day!',
-        `<p>🔴 Today is your highest spending day with <strong>₹${todayExpense.toFixed(2)}</strong> in expenses.</p>`
-      );
+      await this._sendNotification(user, 'highest_spending_day', {
+        subject: 'Notification',
+        title: 'Highest Spending Day',
+        intro: `The date ${txDate} is currently your highest spending day on record.`,
+        highlightTitle: 'Expense Data',
+        highlightContent: `<div>Expense Total: <strong>${formatCurrency(dayExpense)}</strong></div>`,
+        logMessage: `Highest spending day recorded on ${txDate}`,
+      });
     }
   }
 
@@ -162,44 +208,69 @@ class NotificationService {
     const previous = await notificationRepo.getCategorySpendingPreviousMonth(user.id, categoryId);
 
     if (previous > 0 && current > previous * SPIKE_THRESHOLD) {
-      await this._sendNotification(user, 'category_spike',
-        'Category Spending Spike',
-        `<p>📊 Your spending in this category has jumped from <strong>₹${previous.toFixed(2)}</strong> last month to <strong>₹${current.toFixed(2)}</strong> this month.</p>`
-      );
+      await this._sendNotification(user, 'category_spike', {
+        subject: 'Notification',
+        title: 'Monthly Spending Insight',
+        intro: 'A category has seen a sharp increase in spending compared with last month.',
+        highlightTitle: 'Category Comparison',
+        highlightContent: `
+          <div>Previous Month: <strong>${formatCurrency(previous)}</strong></div>
+          <div>Current Month: <strong>${formatCurrency(current)}</strong></div>
+        `,
+        logMessage: 'Category spending spike detected',
+      });
     }
   }
 
   async _checkLowSavings(user) {
-    const alreadySent = await notificationRepo.wasNotificationSentToday(user.id, 'low_savings');
+    const txDate = new Date().toISOString().split('T')[0];
+    const alreadySent = await notificationRepo.wasNotificationSentOnDate(user.id, 'low_savings', txDate);
     if (alreadySent) return;
 
     const summary = await notificationRepo.getCurrentMonthSummary(user.id);
     const prevSavings = await notificationRepo.getPreviousMonthSavings(user.id);
 
     if (summary.savings < LOW_SAVINGS_THRESHOLD) {
-      await this._sendNotification(user, 'low_savings',
-        'Low Savings Warning',
-        `<p>⚠️ Your savings this month are <strong>₹${summary.savings.toFixed(2)}</strong>, which is below ₹${LOW_SAVINGS_THRESHOLD}.</p>`
-      );
+      await this._sendNotification(user, 'low_savings', {
+        subject: 'Notification',
+        title: 'Low Savings Alert',
+        intro: 'Your current month savings are below the configured threshold.',
+        highlightTitle: 'Savings Status',
+        highlightContent: `<div>Current Savings: <strong>${formatCurrency(summary.savings)}</strong></div>`,
+        logMessage: 'Low savings warning',
+      });
     } else if (prevSavings > 0 && summary.savings > prevSavings * 1.5) {
-      await this._sendNotification(user, 'high_savings',
-        'Great Savings Achievement! 🎉',
-        `<p>🏆 Your savings this month (<strong>₹${summary.savings.toFixed(2)}</strong>) are significantly higher than last month (<strong>₹${prevSavings.toFixed(2)}</strong>). Keep it up!</p>`
-      );
+      const alreadySentHigh = await notificationRepo.wasNotificationSentOnDate(user.id, 'high_savings', txDate);
+      if (alreadySentHigh) return;
+      await this._sendNotification(user, 'high_savings', {
+        subject: 'Notification',
+        title: 'Savings Improvement',
+        intro: 'Your savings this month are significantly stronger than last month.',
+        highlightTitle: 'Savings Comparison',
+        highlightContent: `
+          <div>This Month: <strong>${formatCurrency(summary.savings)}</strong></div>
+          <div>Last Month: <strong>${formatCurrency(prevSavings)}</strong></div>
+        `,
+        logMessage: 'Savings improvement detected',
+      });
     }
   }
 
   async _checkNoIncome(user) {
-    const alreadySent = await notificationRepo.wasNotificationSentToday(user.id, 'no_income');
+    const txDate = new Date().toISOString().split('T')[0];
+    const alreadySent = await notificationRepo.wasNotificationSentOnDate(user.id, 'no_income', txDate);
     if (alreadySent) return;
 
     const incomeCount = await notificationRepo.getCurrentMonthIncomeCount(user.id);
     const today = new Date();
     if (today.getDate() >= 10 && incomeCount === 0) {
-      await this._sendNotification(user, 'no_income',
-        'No Income Recorded This Month',
-        `<p>📭 No income transactions have been recorded for this month so far. If you've received income, don't forget to log it!</p>`
-      );
+      await this._sendNotification(user, 'no_income', {
+        subject: 'Notification',
+        title: 'No Income Recorded',
+        intro: 'No income transactions have been recorded for the current month so far.',
+        content: '<p style="margin:0;">If income has already been received, add it to keep your reports accurate.</p>',
+        logMessage: 'No income recorded this month',
+      });
     }
   }
 
@@ -209,60 +280,83 @@ class NotificationService {
 
     const daysSince = Math.floor((Date.now() - new Date(lastDate).getTime()) / (1000 * 60 * 60 * 24));
     if (daysSince >= INACTIVITY_DAYS) {
-      await this._sendNotification(user, 'inactivity',
-        'We Miss You!',
-        `<p>👋 It's been <strong>${daysSince} days</strong> since your last transaction. Keeping your finances up to date helps you stay on track!</p>`
-      );
+      await this._sendNotification(user, 'inactivity', {
+        subject: 'Notification',
+        title: 'Activity Reminder',
+        intro: `It has been ${daysSince} days since your last recorded transaction.`,
+        content: '<p style="margin:0;">Keeping your transactions up to date helps Finance Tracker produce accurate insights and reports.</p>',
+        logMessage: 'Inactivity reminder sent',
+      });
     }
   }
 
   async _checkSpendingHabitInsight(user) {
-    const alreadySent = await notificationRepo.wasNotificationSentToday(user.id, 'spending_insight');
+    const txDate = new Date().toISOString().split('T')[0];
+    const alreadySent = await notificationRepo.wasNotificationSentOnDate(user.id, 'spending_insight', txDate);
     if (alreadySent) return;
 
     const top = await notificationRepo.getTopSpendingCategory(user.id);
     if (top) {
-      await this._sendNotification(user, 'spending_insight',
-        'Spending Habit Insight',
-        `<p>📌 Your top spending category this month is <strong>${top.category_name}</strong> with <strong>₹${parseFloat(top.total).toFixed(2)}</strong> spent.</p>`
-      );
+      await this._sendNotification(user, 'spending_insight', {
+        subject: 'Monthly Spending Summary',
+        title: 'Monthly Spending Insight',
+        intro: 'Here is the category with the highest spend for the current month.',
+        highlightTitle: top.category_name,
+        highlightContent: `<div>Amount Spent: <strong>${formatCurrency(top.total)}</strong></div>`,
+        logMessage: `Top spending category is ${top.category_name}`,
+      });
     }
   }
 
   async _checkRecurringPayments(user) {
-    const alreadySent = await notificationRepo.wasNotificationSentToday(user.id, 'recurring_payment');
+    const txDate = new Date().toISOString().split('T')[0];
+    const alreadySent = await notificationRepo.wasNotificationSentOnDate(user.id, 'recurring_payment', txDate);
     if (alreadySent) return;
 
     const recurring = await notificationRepo.getRecurringTransactions(user.id);
     if (recurring.length > 0) {
-      const list = recurring.map(r =>
-        `<li>${r.description} — ₹${parseFloat(r.amount).toFixed(2)} (${r.occurrences} times, ${r.category_name})</li>`
-      ).join('');
+      const content = recurring.map((item) => `
+        <div style="margin-bottom:8px;">
+          <strong>${item.description}</strong><br>
+          ${formatCurrency(item.amount)} | ${item.occurrences} times | ${item.category_name}
+        </div>
+      `).join('');
 
-      await this._sendNotification(user, 'recurring_payment',
-        'Recurring Payment Detected',
-        `<p>🔄 We detected possible recurring payments:</p><ul>${list}</ul>`
-      );
+      await this._sendNotification(user, 'recurring_payment', {
+        subject: 'Notification',
+        title: 'Recurring Payment Insight',
+        intro: 'Potential recurring payments were detected in your recent transactions.',
+        highlightTitle: 'Recurring Items',
+        highlightContent: content,
+        logMessage: 'Recurring payments detected',
+      });
     }
   }
 
   async _checkBudgetNotSet(user, categoryId) {
     const cats = await notificationRepo.getCategoriesWithoutBudget(user.id);
-    const match = cats.find(c => c.id === categoryId);
+    const match = cats.find((item) => item.id === categoryId);
     if (match) {
-      await this._sendNotification(user, 'budget_not_set',
-        `No Budget Set — ${match.name}`,
-        `<p>📋 You have expenses in <strong>${match.name}</strong> but no budget set for this month. Consider setting one!</p>`
-      );
+      await this._sendNotification(user, 'budget_not_set', {
+        subject: 'Notification',
+        title: 'Budget Not Set',
+        intro: `You have recorded spending in ${match.name} without an active monthly budget.`,
+        content: '<p style="margin:0;">Consider adding a budget to track this category more effectively.</p>',
+        logMessage: `No budget set for ${match.name}`,
+      });
     }
   }
 
-  // --- CORE SEND + LOG ---
-
-  async _sendNotification(user, type, subject, htmlContent) {
+  async _sendNotification(user, type, payload) {
     try {
-      await sendEmail(user.email, subject, htmlContent);
-      await notificationRepo.logNotification(user.id, type, subject);
+      await sendEmail(user.email, payload.subject, {
+        title: payload.title,
+        intro: payload.intro,
+        content: payload.content,
+        highlightTitle: payload.highlightTitle,
+        highlightContent: payload.highlightContent,
+      });
+      await notificationRepo.logNotification(user.id, type, payload.logMessage || payload.title);
     } catch (err) {
       console.error(`[NOTIFICATION] Error sending ${type} to ${user.email}:`, err.message);
     }
