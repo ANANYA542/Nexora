@@ -4,7 +4,16 @@ const ONE_DAY = 24 * 60 * 60 * 1000;
 const ONE_WEEK = 7 * ONE_DAY;
 
 class SchedulerService {
+  constructor() {
+    this.started = false;
+  }
+
   start() {
+    if (this.started) {
+      return;
+    }
+
+    this.started = true;
     console.log('[SCHEDULER] Started notification scheduler');
 
    
@@ -15,7 +24,7 @@ class SchedulerService {
       );
     }, ONE_DAY);
 
-    // Weekly summary — every 7 days
+
     setInterval(() => {
       console.log('[SCHEDULER] Sending weekly summaries...');
       notificationService.sendWeeklySummaries().catch(err =>
@@ -23,7 +32,7 @@ class SchedulerService {
       );
     }, ONE_WEEK);
 
-    // Monthly summary + budget reminder — check daily, run on 1st of month
+
     setInterval(() => {
       const today = new Date();
       if (today.getDate() === 1) {

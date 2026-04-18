@@ -6,7 +6,7 @@ class NotificationRepository {
     const { rows } = await pool.query(
       `SELECT COALESCE(AVG(daily_total), 0) AS avg_daily
        FROM (
-         SELECT date, ABS(SUM(amount)) AS daily_total
+         SELECT TO_CHAR(date, 'YYYY-MM-DD') AS date, ABS(SUM(converted_amount)) AS daily_total
          FROM transactions
          WHERE user_id = $1 AND type = 'expense'
          GROUP BY date
@@ -16,19 +16,19 @@ class NotificationRepository {
     return parseFloat(rows[0].avg_daily);
   }
 
-  async getTodayExpense(userId) {
+  async getExpenseForDate(userId, dateString) {
     const { rows } = await pool.query(
-      `SELECT COALESCE(ABS(SUM(amount)), 0) AS total
+      `SELECT COALESCE(ABS(SUM(converted_amount)), 0) AS total
        FROM transactions
-       WHERE user_id = $1 AND type = 'expense' AND date = CURRENT_DATE`,
-      [userId]
+       WHERE user_id = $1 AND type = 'expense' AND date = $2`,
+      [userId, dateString]
     );
     return parseFloat(rows[0].total);
   }
 
   async getHighestSpendingDay(userId) {
     const { rows } = await pool.query(
-      `SELECT date, ABS(SUM(amount)) AS total
+      `SELECT TO_CHAR(date, 'YYYY-MM-DD') AS date, ABS(SUM(converted_amount)) AS total
        FROM transactions
        WHERE user_id = $1 AND type = 'expense'
        GROUP BY date
@@ -41,7 +41,7 @@ class NotificationRepository {
 
   async getCategorySpendingCurrentMonth(userId, categoryId) {
     const { rows } = await pool.query(
-      `SELECT COALESCE(ABS(SUM(amount)), 0) AS total
+      `SELECT COALESCE(ABS(SUM(converted_amount)), 0) AS total
        FROM transactions
        WHERE user_id = $1 AND category_id = $2 AND type = 'expense'
          AND EXTRACT(MONTH FROM date) = EXTRACT(MONTH FROM CURRENT_DATE)
@@ -53,7 +53,7 @@ class NotificationRepository {
 
   async getCategorySpendingPreviousMonth(userId, categoryId) {
     const { rows } = await pool.query(
-      `SELECT COALESCE(ABS(SUM(amount)), 0) AS total
+      `SELECT COALESCE(ABS(SUM(converted_amount)), 0) AS total
        FROM transactions
        WHERE user_id = $1 AND category_id = $2 AND type = 'expense'
          AND EXTRACT(MONTH FROM date) = EXTRACT(MONTH FROM CURRENT_DATE - INTERVAL '1 month')
@@ -66,8 +66,8 @@ class NotificationRepository {
   async getCurrentMonthSummary(userId) {
     const { rows } = await pool.query(
       `SELECT
-         COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) AS total_income,
-         COALESCE(ABS(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END)), 0) AS total_expense
+         COALESCE(SUM(CASE WHEN type = 'income' THEN converted_amount ELSE 0 END), 0) AS total_income,
+         COALESCE(ABS(SUM(CASE WHEN type = 'expense' THEN converted_amount ELSE 0 END)), 0) AS total_expense
        FROM transactions
        WHERE user_id = $1
          AND EXTRACT(MONTH FROM date) = EXTRACT(MONTH FROM CURRENT_DATE)
@@ -82,8 +82,8 @@ class NotificationRepository {
   async getPreviousMonthSavings(userId) {
     const { rows } = await pool.query(
       `SELECT
-         COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0)
-         - COALESCE(ABS(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END)), 0) AS savings
+         COALESCE(SUM(CASE WHEN type = 'income' THEN converted_amount ELSE 0 END), 0)
+         - COALESCE(ABS(SUM(CASE WHEN type = 'expense' THEN converted_amount ELSE 0 END)), 0) AS savings
        FROM transactions
        WHERE user_id = $1
          AND EXTRACT(MONTH FROM date) = EXTRACT(MONTH FROM CURRENT_DATE - INTERVAL '1 month')
@@ -114,7 +114,7 @@ class NotificationRepository {
 
   async getTopSpendingCategory(userId) {
     const { rows } = await pool.query(
-      `SELECT c.name AS category_name, ABS(SUM(t.amount)) AS total
+      `SELECT c.name AS category_name, ABS(SUM(t.converted_amount)) AS total
        FROM transactions t
        JOIN categories c ON c.id = t.category_id
        WHERE t.user_id = $1 AND t.type = 'expense'
@@ -130,13 +130,13 @@ class NotificationRepository {
 
   async getRecurringTransactions(userId) {
     const { rows } = await pool.query(
-      `SELECT description, ABS(amount) AS amount, COUNT(*) AS occurrences,
+      `SELECT t.description AS description, ABS(t.converted_amount) AS amount, COUNT(*) AS occurrences,
               c.name AS category_name
        FROM transactions t
        JOIN categories c ON c.id = t.category_id
        WHERE t.user_id = $1 AND t.type = 'expense'
          AND t.description IS NOT NULL AND t.description != ''
-       GROUP BY t.description, t.amount, c.name
+       GROUP BY t.description, t.converted_amount, c.name
        HAVING COUNT(*) >= 3
        ORDER BY occurrences DESC`,
       [userId]
@@ -166,8 +166,8 @@ class NotificationRepository {
   async getWeeklySummary(userId) {
     const { rows } = await pool.query(
       `SELECT
-         COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) AS total_income,
-         COALESCE(ABS(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END)), 0) AS total_expense,
+         COALESCE(SUM(CASE WHEN type = 'income' THEN converted_amount ELSE 0 END), 0) AS total_income,
+         COALESCE(ABS(SUM(CASE WHEN type = 'expense' THEN converted_amount ELSE 0 END)), 0) AS total_expense,
          COUNT(*) AS transaction_count
        FROM transactions
        WHERE user_id = $1
@@ -191,7 +191,7 @@ class NotificationRepository {
        FROM budgets b
        JOIN categories c ON c.id = b.category_id
        LEFT JOIN (
-         SELECT category_id, ABS(SUM(amount)) AS total
+         SELECT category_id, ABS(SUM(converted_amount)) AS total
          FROM transactions
          WHERE user_id = $1 AND type = 'expense'
            AND EXTRACT(MONTH FROM date) = EXTRACT(MONTH FROM CURRENT_DATE)
@@ -218,11 +218,23 @@ class NotificationRepository {
     );
   }
 
-  async wasNotificationSentToday(userId, type) {
+  async getLatestForUser(userId, limit = 5) {
+    const { rows } = await pool.query(
+      `SELECT id, type, message, sent_at
+       FROM notification_log
+       WHERE user_id = $1
+       ORDER BY sent_at DESC
+       LIMIT $2`,
+      [userId, limit]
+    );
+    return rows;
+  }
+
+  async wasNotificationSentOnDate(userId, type, dateString) {
     const { rows } = await pool.query(
       `SELECT COUNT(*) AS count FROM notification_log
-       WHERE user_id = $1 AND type = $2 AND sent_at::date = CURRENT_DATE`,
-      [userId, type]
+       WHERE user_id = $1 AND type = $2 AND DATE(sent_at) = $3`,
+      [userId, type, dateString]
     );
     return parseInt(rows[0].count, 10) > 0;
   }
