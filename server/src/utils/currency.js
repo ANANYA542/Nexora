@@ -1,16 +1,22 @@
 const CONVERSION_RATES = {
   INR: 1,
-  USD: 83,
-  EUR: 90,
-  GBP: 105,
+  USD: 93,
+  EUR: 108,
+  GBP: 124,
 };
 
 const getConvertedAmount = (amount, currency = 'INR') => {
-  const rate = CONVERSION_RATES[currency] || 1; // Default to 1 (INR) if not found
+  const rate = CONVERSION_RATES[currency] || 1;
   return parseFloat((amount * rate).toFixed(2));
+};
+
+const convertFromINR = (amount, currency = 'INR') => {
+  const rate = CONVERSION_RATES[currency] || 1;
+  return parseFloat((amount / rate).toFixed(2));
 };
 
 module.exports = {
   CONVERSION_RATES,
   getConvertedAmount,
+  convertFromINR,
 };
