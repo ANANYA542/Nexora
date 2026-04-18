@@ -26,7 +26,7 @@ const updateProfileSchema = z.object({
 );
 
 
-const createTransactionSchema = z.object({
+const transactionBaseSchema = z.object({
   category_id: z.string().uuid('Invalid category ID').optional(),
   type: z.enum(['income', 'expense']),
   amount: z.coerce
@@ -35,7 +35,9 @@ const createTransactionSchema = z.object({
   currency: z.string().max(10).optional().default('INR'),
   description: z.string().max(500).optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD').optional(),
-}).refine(
+});
+
+const createTransactionSchema = transactionBaseSchema.refine(
   (data) => !(data.type === 'income' && data.amount < 0),
   {
     message: 'Income amount must be positive. Negative amounts (refunds) are only valid for expense transactions.',
@@ -43,7 +45,7 @@ const createTransactionSchema = z.object({
   }
 );
 
-const updateTransactionSchema = createTransactionSchema.partial();
+const updateTransactionSchema = transactionBaseSchema.partial();
 
 const balanceCheckSchema = z.object({
   amount: z.coerce

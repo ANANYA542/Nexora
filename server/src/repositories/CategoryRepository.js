@@ -26,6 +26,26 @@ class CategoryRepository {
   }
 
   async create({ name, type, userId }) {
+    // Check if category exists (including soft-deleted)
+    const { rows: existing } = await pool.query(
+      `SELECT * FROM categories 
+       WHERE name = $1 AND type = $2 AND (user_id = $3 OR user_id IS NULL)`,
+      [name, type, userId]
+    );
+
+    if (existing.length > 0) {
+      if (existing[0].is_deleted) {
+        // Undelete the existing soft-deleted category
+        const { rows: updated } = await pool.query(
+          `UPDATE categories SET is_deleted = false WHERE id = $1 RETURNING *`,
+          [existing[0].id]
+        );
+        return updated[0];
+      }
+      // If it exists and is NOT soft-deleted, trying to insert will legitimately fail via constraints,
+      // but we can throw an error nicely here or let constraints handle it below.
+    }
+
     const { rows } = await pool.query(
       `INSERT INTO categories (name, type, user_id)
        VALUES ($1, $2, $3)
