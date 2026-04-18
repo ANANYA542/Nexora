@@ -27,11 +27,7 @@ class CategoryService {
     const transactionCount = parseInt(rows[0].count, 10);
 
     if (transactionCount > 0) {
-      throw new AppError(
-        `Cannot delete category "${category.name}" — it is used by ${transactionCount} transaction(s). ` +
-        `Reassign or delete those transactions first.`,
-        409
-      );
+      return categoryRepository.softDeleteForUser(categoryId, userId);
     }
 
     const deleted = await categoryRepository.deleteForUser(categoryId, userId);

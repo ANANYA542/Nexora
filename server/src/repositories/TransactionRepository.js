@@ -36,7 +36,7 @@ class TransactionRepository {
       SELECT
         t.id, t.type, t.amount, t.currency, t.converted_amount, t.description, TO_CHAR(t.date, 'YYYY-MM-DD') AS date, t.receipt_url, t.created_at,
         c.id   AS category_id,
-        c.name AS category_name,
+        CASE WHEN c.is_deleted THEN c.name || ' (Deleted)' ELSE c.name END AS category_name,
         c.type AS category_type
       FROM transactions t
       JOIN categories c ON c.id = t.category_id
@@ -69,7 +69,7 @@ class TransactionRepository {
     const { rows } = await pool.query(
       `SELECT
          t.id, t.type, t.amount, t.currency, t.converted_amount, t.description, TO_CHAR(t.date, 'YYYY-MM-DD') AS date, t.receipt_url, t.created_at,
-         c.name AS category_name
+         CASE WHEN c.is_deleted THEN c.name || ' (Deleted)' ELSE c.name END AS category_name
        FROM transactions t
        JOIN categories c ON c.id = t.category_id
        WHERE t.id = $1 AND t.user_id = $2

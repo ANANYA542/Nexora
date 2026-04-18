@@ -6,7 +6,8 @@ class CategoryRepository {
   async findAllForUser(userId) {
     const { rows } = await pool.query(
       `SELECT * FROM categories
-       WHERE user_id IS NULL OR user_id = $1
+       WHERE (user_id IS NULL OR user_id = $1)
+       AND is_deleted = false
        ORDER BY type, name`,
       [userId]
     );
@@ -45,6 +46,17 @@ class CategoryRepository {
   async deleteForUser(categoryId, userId) {
     const { rows } = await pool.query(
       `DELETE FROM categories
+       WHERE id = $1 AND user_id = $2
+       RETURNING *`,
+      [categoryId, userId]
+    );
+    return rows[0] || null;
+  }
+
+  async softDeleteForUser(categoryId, userId) {
+    const { rows } = await pool.query(
+      `UPDATE categories
+       SET is_deleted = true
        WHERE id = $1 AND user_id = $2
        RETURNING *`,
       [categoryId, userId]
