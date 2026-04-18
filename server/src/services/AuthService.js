@@ -1,5 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const pool = require('../config/db');
 const { OAuth2Client } = require('google-auth-library');
 const userRepository = require('../repositories/UserRepository');
 const AppError = require('../utils/AppError');
@@ -84,6 +86,58 @@ class AuthService {
       throw new AppError('User not found', 404);
     }
     return updated;
+  }
+
+  async forgotPassword(email) {
+    if (!email) throw new AppError('Email is required', 400);
+    const user = await userRepository.findByEmail(email);
+    if (!user) return true; // Pretend it succeeded always per normal security rules
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const token_hash = crypto.createHash('sha256').update(token).digest('hex');
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+    
+    await pool.query(
+      `INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)`,
+      [user.id, token_hash, expiresAt]
+    );
+
+    const notificationService = require('./NotificationService');
+    notificationService.sendPasswordResetLink(user, token).catch(() => {});
+    
+    return true;
+  }
+
+  async verifyResetToken(token) {
+    if (!token) throw new AppError('Token is required', 400);
+    const token_hash = crypto.createHash('sha256').update(token).digest('hex');
+    const { rows } = await pool.query(
+      `SELECT * FROM password_reset_tokens WHERE token_hash = $1 AND expires_at > NOW()`,
+      [token_hash]
+    );
+    if (rows.length === 0) throw new AppError('Token is invalid or has prominently expired', 400);
+    return true;
+  }
+
+  async resetPassword(token, newPassword) {
+    if (!token) throw new AppError('Token is required', 400);
+    if (!newPassword || newPassword.length < 6) throw new AppError('Password must be at least 6 characters', 400);
+    
+    const token_hash = crypto.createHash('sha256').update(token).digest('hex');
+    const { rows } = await pool.query(
+      `SELECT * FROM password_reset_tokens WHERE token_hash = $1 AND expires_at > NOW()`,
+      [token_hash]
+    );
+    
+    if (rows.length === 0) throw new AppError('Token is invalid or has expired', 400);
+    
+    const userId = rows[0].user_id;
+    const password_hash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    
+    await userRepository.updateById(userId, { password_hash });
+    await pool.query(`DELETE FROM password_reset_tokens WHERE token_hash = $1`, [token_hash]);
+    
+    return true;
   }
 
   async googleLogin(idToken) {

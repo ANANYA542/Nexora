@@ -3,6 +3,8 @@ const API_BASE = 'http://localhost:5003/api';
 function isAuthPage() {
   return window.location.pathname.includes('index.html') ||
     window.location.pathname.includes('register.html') ||
+    window.location.pathname.includes('forgot-password.html') ||
+    window.location.pathname.includes('reset-password.html') ||
     window.location.pathname === '/' ||
     window.location.pathname.endsWith('client/');
 }

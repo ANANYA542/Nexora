@@ -11,6 +11,10 @@ router.post('/register', validate(registerSchema), (req, res) => authController.
 router.post('/login',    validate(loginSchema),    (req, res) => authController.login(req, res));
 router.post('/google',   validate(googleLoginSchema), (req, res) => authController.googleLogin(req, res));
 
+router.post('/forgot-password', (req, res) => authController.forgotPassword(req, res));
+router.get('/verify-reset-token', (req, res) => authController.verifyResetToken(req, res));
+router.post('/reset-password', (req, res) => authController.resetPassword(req, res));
+
 
 router.get('/profile',  authenticate, (req, res) => authController.getProfile(req, res));
 router.put('/profile',  authenticate, validate(updateProfileSchema), (req, res) => authController.updateProfile(req, res));

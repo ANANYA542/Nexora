@@ -18,6 +18,24 @@ class AuthController {
     sendSuccess(res, { user, token }, 'Google login successful');
   }
 
+  async forgotPassword(req, res) {
+    const { email } = req.body;
+    await authService.forgotPassword(email);
+    sendSuccess(res, null, 'If an account exists, a temporary password link has been emailed to you.');
+  }
+
+  async verifyResetToken(req, res) {
+    const { token } = req.query;
+    await authService.verifyResetToken(token);
+    sendSuccess(res, null, 'Token is valid');
+  }
+
+  async resetPassword(req, res) {
+    const { token, new_password } = req.body;
+    await authService.resetPassword(token, new_password);
+    sendSuccess(res, null, 'Password successfully reset. You may now log in.');
+  }
+
   async getProfile(req, res) {
     const user = await authService.getProfile(req.user.id);
     sendSuccess(res, { user });
