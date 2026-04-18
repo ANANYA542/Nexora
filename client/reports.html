@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head><title>Reports | Finza</title><link rel="stylesheet" href="css/styles.css"></head>
+<body>
+  <nav>
+    <div class="nav-logo">Finza</div>
+    <div class="nav-links">
+      <a href="dashboard.html">Dashboard</a>
+      <a href="transactions.html">Transactions</a>
+      <a href="budgets.html">Budgets</a>
+      <a href="categories.html">Categories</a>
+      <a href="reports.html" class="active">Reports</a>
+    </div>
+    <div class="nav-actions">
+      <button onclick="logout()">Logout</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="page-header">
+      <h2>Reports</h2>
+      <p>Monthly backend aggregates without frontend recalculation. Report values are normalized to INR by the backend.</p>
+    </div>
+
+    <div class="toolbar">
+      <div class="form-group toolbar-field">
+        <label>Month</label>
+        <input type="number" id="reportMonth" placeholder="MM" min="1" max="12">
+      </div>
+      <div class="form-group toolbar-field">
+        <label>Year</label>
+        <input type="number" id="reportYear" placeholder="YYYY">
+      </div>
+      <button type="button" class="secondary" id="applyReportYear">Apply</button>
+      <button type="button" class="secondary" id="generateAiSummary">Generate AI Summary</button>
+    </div>
+
+    <div class="card" style="margin-bottom:24px;">
+      <h3 class="widget-title">AI Monthly Summary</h3>
+      <p id="aiReportSummary" class="empty-state">Select a month and year to generate a summary.</p>
+    </div>
+
+    <div class="card" style="padding:0;">
+      <table>
+        <thead>
+          <tr><th>Period</th><th>Income</th><th>Expenses</th><th>Savings</th></tr>
+        </thead>
+        <tbody id="reportsTable"></tbody>
+      </table>
+    </div>
+  </div>
+  <script src="js/api.js"></script>
+  <script src="js/reports.js"></script>
+</body>
+</html>

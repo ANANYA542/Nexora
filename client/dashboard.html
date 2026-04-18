@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head><title>Dashboard | Finza</title><link rel="stylesheet" href="css/styles.css"></head>
+<body>
+  <nav>
+    <div class="nav-logo">Finza</div>
+    <div class="nav-links">
+      <a href="dashboard.html" class="active">Dashboard</a>
+      <a href="transactions.html">Transactions</a>
+      <a href="budgets.html">Budgets</a>
+      <a href="categories.html">Categories</a>
+      <a href="reports.html">Reports</a>
+    </div>
+    <div class="nav-actions">
+      <button onclick="logout()">Logout</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="page-header">
+      <span class="sup">OVERVIEW</span>
+      <h2>Financial Canvas</h2>
+      <p>Live metrics from your backend analytics with server-side currency conversion.</p>
+    </div>
+
+    <div class="toolbar">
+      <div class="form-group toolbar-field">
+        <label>Dashboard Currency</label>
+        <select id="dashboardCurrency">
+          <option value="INR">INR</option>
+          <option value="USD">USD</option>
+          <option value="EUR">EUR</option>
+          <option value="GBP">GBP</option>
+        </select>
+      </div>
+    </div>
+
+
+    <div class="dashboard-grid" id="summary"></div>
+
+
+    <div class="chart-grid">
+      <div class="card">
+        <h3 class="widget-title">Expense by Category</h3>
+        <div class="chart-container"><canvas id="expenseChart"></canvas></div>
+        <ul id="expenseByCategory"></ul>
+      </div>
+      <div class="card">
+        <h3 class="widget-title">Income by Category</h3>
+        <div class="chart-container"><canvas id="incomeChart"></canvas></div>
+        <ul id="incomeByCategory"></ul>
+      </div>
+    </div>
+
+
+    <div class="widget-grid" style="margin-top: 24px;">
+      <div>
+        <div class="card">
+          <h3 class="widget-title">Recent Transactions</h3>
+          <div class="table-shell">
+            <table>
+              <thead>
+                <tr><th>Date</th><th>Description</th><th>Category</th><th>Value</th></tr>
+              </thead>
+              <tbody id="recentTransactions"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="card" style="margin-bottom: 24px;">
+          <h3 class="widget-title">Budget Allocation</h3>
+          <div id="budgetAllocation" class="empty-state">Loading budgets...</div>
+        </div>
+        <div class="card" style="margin-bottom: 24px;">
+          <h3 class="widget-title">Highest Spending Day</h3>
+          <div id="highestSpendingDay" class="empty-state">No spending data yet.</div>
+        </div>
+        <div class="card">
+          <div class="panel-head">
+            <h3 class="widget-title">Latest Notifications</h3>
+            <div class="table-actions">
+              <button class="secondary small" type="button" id="runDailyChecks">Run Daily</button>
+              <button class="secondary small" type="button" id="sendWeeklySummary">Weekly</button>
+              <button class="secondary small" type="button" id="sendMonthlySummary">Monthly</button>
+            </div>
+          </div>
+          <ul id="notifications"></ul>
+          <p id="notificationStatus" class="status-copy"></p>
+        </div>
+        <div class="card" style="margin-top:24px;">
+          <h3 class="widget-title">AI Advisor</h3>
+          <div class="form-group">
+            <label>Ask a finance question</label>
+            <input type="text" id="aiQuestion" placeholder="How am I doing this month?">
+          </div>
+          <div class="inline-actions">
+            <button type="button" class="secondary" id="askAiButton">Ask AI</button>
+          </div>
+          <p id="aiReply" class="status-copy">Your dashboard, budgets, and recent transactions will be used for this answer.</p>
+        </div>
+      </div>
+    </div>
+
+
+    <div class="card" style="margin-top: 24px;">
+      <h3 class="widget-title">Unusual Transactions</h3>
+      <div class="table-shell">
+        <table>
+          <thead>
+            <tr><th>Date</th><th>Description</th><th>Category</th><th>Amount</th></tr>
+          </thead>
+          <tbody id="anomalyTable"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/notifications.js"></script>
+  <script src="js/dashboard.js"></script>
+</body>
+</html>

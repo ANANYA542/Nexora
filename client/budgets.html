@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head><title>Budgets | Finza</title><link rel="stylesheet" href="css/styles.css"></head>
+<body>
+  <nav>
+    <div class="nav-logo">Finza</div>
+    <div class="nav-links">
+      <a href="dashboard.html">Dashboard</a>
+      <a href="transactions.html">Transactions</a>
+      <a href="budgets.html" class="active">Budgets</a>
+      <a href="categories.html">Categories</a>
+      <a href="reports.html">Reports</a>
+    </div>
+    <div class="nav-actions">
+      <button onclick="logout()">Logout</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="split-layout">
+      <div>
+        <div class="page-header">
+          <h2>Budgets</h2>
+          <p>Exact budget utilization from backend responses.</p>
+        </div>
+
+        <div class="table-shell">
+          <table>
+            <thead>
+              <tr><th>Category</th><th>Period</th><th>Limit</th><th>Spent</th><th>Remaining</th><th></th></tr>
+            </thead>
+            <tbody id="budgetsTable"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="form-panel">
+        <h3 id="budgetFormTitle">Add Budget</h3>
+        <form id="budgetForm">
+          <input type="hidden" id="budgetId">
+          <div class="form-group">
+            <label>Category</label>
+            <select id="category_id" required></select>
+          </div>
+          <div class="form-group">
+            <label>Monthly Limit</label>
+            <input type="number" id="limit" required placeholder="0.00">
+          </div>
+          <button type="button" class="secondary" id="suggestBudgetButton">Suggest Budget</button>
+          <p id="budgetSuggestionStatus" class="status-copy"></p>
+          <div class="inline-row">
+            <div class="form-group" style="flex:1;">
+               <label>Month</label>
+               <input type="number" id="month" required placeholder="MM">
+            </div>
+            <div class="form-group" style="flex:1;">
+               <label>Year</label>
+               <input type="number" id="year" required placeholder="YYYY">
+            </div>
+          </div>
+          <div class="inline-actions">
+            <button type="submit" class="primary" id="budgetSubmitButton">Save Budget</button>
+            <button type="button" class="secondary" id="cancelBudgetEdit" style="display:none;">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  <script src="js/api.js"></script>
+  <script src="js/categories.js"></script>
+  <script src="js/budgets.js"></script>
+</body>
+</html>
