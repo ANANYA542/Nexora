@@ -21,14 +21,21 @@
       <span class="sup">OVERVIEW</span>
       <h2>Financial Canvas</h2>
       <p>Live metrics from your backend analytics with server-side currency conversion.</p>
-    </div>
-
-    <div class="toolbar">
-      <div class="form-group toolbar-field">
-        <label>Dashboard Currency</label>
-        <select id="dashboardCurrency">
-          <option value="INR">INR</option><option value="USD">USD</option><option value="EUR">EUR</option><option value="GBP">GBP</option>
-        </select>
+      <div style="display: flex; gap: 16px; align-items: flex-end;">
+        <div>
+          <span class="muted-inline" style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; display:block;">Timeframe</span>
+          <select id="dashboardTimeframe" onchange="loadDashboard()" style="padding:8px 12px; border:1px solid var(--border-color); border-radius:6px; background:var(--bg-color); color:var(--text-dark); cursor:pointer;">
+            <option value="all">All Time</option>
+            <option value="this_month">This Month</option>
+            <option value="last_month">Last Month</option>
+          </select>
+        </div>
+        <div>
+          <span class="muted-inline" style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; display:block;">Dashboard Currency</span>
+          <select id="dashboardCurrency" onchange="loadDashboard()" style="padding:8px 12px; border:1px solid var(--border-color); border-radius:6px; background:var(--bg-color); color:var(--text-dark); cursor:pointer;">
+            <option value="INR">INR</option><option value="USD">USD</option><option value="EUR">EUR</option><option value="GBP">GBP</option>
+          </select>
+        </div>
       </div>
     </div>
 

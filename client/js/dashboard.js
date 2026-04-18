@@ -114,18 +114,30 @@ function checkRenderHealthScore() {
   let exceededCount = 0;
   localBudgetData.forEach(b => { if(parseFloat(b.amount_spent) > parseFloat(b.limit_amount)) exceededCount++; });
   if(localBudgetData.length > 0 && exceededCount === 0) score += 25;
-  else if(exceededCount < 2) score += 15;
+  else if(localBudgetData.length > 0 && exceededCount < 2) score += 15;
 
-  if(inc > exp) score += 25;
-  else if(inc >= exp * 0.9) score += 15;
-  
-  if(localAnomaliesCount === 0) score += 25;
-  else if(localAnomaliesCount <= 1) score += 15;
+  if (inc > 0 || exp > 0) {
+    if(inc > exp) score += 25;
+    else if(inc >= exp * 0.9) score += 15;
+    
+    if(localAnomaliesCount === 0) score += 25;
+    else if(localAnomaliesCount <= 1) score += 15;
+  }
 
-  let color = '#b24a3a'; // red
+  let color = '#b24a3a'; 
   let label = 'At Risk';
-  if(score >= 80) { color = '#5a8a7a'; label = 'Good'; } // green
-  else if(score >= 50) { color = '#d4a44c'; label = 'Needs Attention'; } // amber
+  
+  if (inc === 0 && exp === 0) { 
+    score = 0; 
+    color = '#94a3b8'; 
+    label = 'Not Enough Data'; 
+  } else if(score >= 80) { 
+    color = '#5a8a7a'; 
+    label = 'Good'; 
+  } else if(score >= 50) { 
+    color = '#d4a44c'; 
+    label = 'Needs Attention'; 
+  }
 
   document.getElementById('healthScoreNum').innerHTML = `Financial Health Score: <span style="color:${color}">${score}/100</span>`;
   const lbl = document.getElementById('healthScoreLabel');
@@ -137,7 +149,7 @@ function checkRenderHealthScore() {
   bar.style.background = color;
 
   document.getElementById('badgeSavings').innerHTML = `Savings: ${rate.toFixed(0)}%`;
-  document.getElementById('badgeBudgets').innerHTML = `Budgets: ${localBudgetData.length - exceededCount}/${localBudgetData.length} on track`;
+  document.getElementById('badgeBudgets').innerHTML = `Budgets: ${localBudgetData.length > 0 ? (localBudgetData.length - exceededCount) + '/' + localBudgetData.length : '0/0'} on track`;
   document.getElementById('badgeAnomalies').innerHTML = `Anomalies: ${localAnomaliesCount} this month`;
   document.getElementById('badgeIncome').innerHTML = `Income Sources: ${localDashboardData.income_by_category.length}`;
 }
@@ -168,7 +180,9 @@ function renderDashboard(data) {
 
 async function loadDashboard() {
   const currency = getDashboardCurrency();
-  const cacheKey = `dashboard_data_${currency}`;
+  const timeframe = document.getElementById('dashboardTimeframe') ? document.getElementById('dashboardTimeframe').value : 'all';
+  const cacheKey = `dashboard_data_${currency}_${timeframe}`;
+  
   const cached = sessionStorage.getItem(cacheKey);
   if (cached) {
     try { renderDashboard(JSON.parse(cached)); } catch (_err) {}
@@ -180,13 +194,26 @@ async function loadDashboard() {
     `;
   }
   try {
-    const res = await apiCall(`/dashboard?currency=${encodeURIComponent(currency)}`);
+    let endpoint = `/dashboard?currency=${encodeURIComponent(currency)}`;
+    
+    if (timeframe === 'this_month') {
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+      endpoint += `&start_date=${start}`;
+    } else if (timeframe === 'last_month') {
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split('T')[0];
+      const end = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split('T')[0];
+      endpoint += `&start_date=${start}&end_date=${end}`;
+    }
+
+    const res = await apiCall(endpoint);
     const data = res.data;
     sessionStorage.setItem(cacheKey, JSON.stringify(data));
     renderDashboard(data);
   } catch (err) {
     document.getElementById('summary').innerHTML = `<div class="card" style="grid-column: 1 / -1; text-align:center; padding:24px;">⚠️ Could not load summary. <a href="#" onclick="loadDashboard()">Retry →</a></div>`;
-    localDashboardData = { summary: { total_income: 0, total_expense: 0 }, income_by_category: [] };
+    localDashboardData = { summary: { total_income: 0, total_expense: 0 }, income_by_category: [], expense_by_category: [] };
     checkRenderHealthScore();
   }
 }

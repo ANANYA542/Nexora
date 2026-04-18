@@ -23,12 +23,21 @@ async function generateAiSummary() {
 }
 
 async function loadReports() {
+  const month = document.getElementById('reportMonth').value.trim();
   const year = document.getElementById('reportYear').value.trim();
   const endpoint = year ? `/reports/monthly?year=${encodeURIComponent(year)}` : '/reports/monthly';
 
   try {
     const res = await apiCall(endpoint);
-    const rows = res.data.report;
+    let rows = res.data.report;
+
+    if (month && year) {
+      const targetStr = `${year}-${month.padStart(2, '0')}`;
+      rows = rows.filter(r => r.month === targetStr);
+      if (rows.length === 0) {
+        alert(`No transactions exist for ${targetStr}.`);
+      }
+    }
 
     document.getElementById('reportsTable').innerHTML = rows.length
       ? rows.map((row) => `

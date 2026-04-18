@@ -17,8 +17,16 @@ async function loadBudgetCategories() {
 }
 
 async function loadBudgets() {
+  const m = document.getElementById('filterMonth') ? document.getElementById('filterMonth').value.trim() : '';
+  const y = document.getElementById('filterYear') ? document.getElementById('filterYear').value.trim() : '';
+  
+  let endpoint = '/budgets';
+  if (m && y) endpoint += `?month=${encodeURIComponent(m)}&year=${encodeURIComponent(y)}`;
+  else if (m) endpoint += `?month=${encodeURIComponent(m)}`;
+  else if (y) endpoint += `?year=${encodeURIComponent(y)}`;
+
   try {
-    const res = await apiCall('/budgets');
+    const res = await apiCall(endpoint);
     const budgets = res.data.budgets;
 
     document.getElementById('budgetsTable').innerHTML = budgets.length
