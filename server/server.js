@@ -10,18 +10,9 @@ const start = async () => {
     await pool.query('SELECT 1');
     console.log('Database connected');
 
-    const server = await app.listen(PORT);
-    const addr = server.address();
-    console.log(`Server running on http://localhost:${addr.port}`);
-    console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`);
-
-
-    process.on('SIGTERM', async () => {
-      console.log('SIGTERM received — closing server gracefully...');
-      server.close(async () => {
-        await pool.end();
-        process.exit(0);
-      });
+    const server = app.listen(PORT, () => {
+      console.log(`Server successfully started on port ${PORT}`);
+      console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
     });
   } catch (err) {
     console.error('Failed to start server:', err.message);

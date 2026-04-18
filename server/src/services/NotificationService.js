@@ -361,6 +361,68 @@ class NotificationService {
       console.error(`[NOTIFICATION] Error sending ${type} to ${user.email}:`, err.message);
     }
   }
+  async sendAnomalyAlert(user, transaction, explanation) {
+    const subject = `Unusual Transaction Detected — ${transaction.category_name || 'Uncategorized'}`;
+    const amountStr = `${Math.abs(parseFloat(transaction.amount)).toFixed(2)} ${transaction.currency || 'INR'}`;
+    const content = `
+      <p style="margin:0 0 12px;">
+        <strong>${transaction.description || 'No description'}</strong><br>
+        Amount: <strong>${amountStr}</strong><br>
+        Category: <strong>${transaction.category_name || 'Uncategorized'}</strong><br>
+        Date: <strong>${transaction.date}</strong>
+      </p>
+    `;
+
+    await this._sendNotification(user, 'anomaly_alert', {
+      subject,
+      title: 'Unusual Transaction Detected',
+      intro: `Hi ${user.name}, a transaction on your account has been flagged as statistically unusual.`,
+      content,
+      highlightTitle: 'Why This Was Flagged',
+      highlightContent: `
+        <div>${explanation}</div>
+        <div style="margin-top:12px;font-size:13px;color:#64748b;">
+          If this was you, no action needed. If this looks unfamiliar, please review your account immediately.
+        </div>
+      `,
+    });
+  }
+
+  async sendBudgetOverrunAlert(user, category, spent, limit) {
+    const subject = `Budget Overrun Alert — ${category}`;
+    const overrun = (spent - limit).toFixed(2);
+    const content = `
+      <p style="margin:0 0 12px;">
+        Hi ${user.name}, you have exceeded your budget for <strong>${category}</strong>.
+      </p>
+    `;
+
+    await this._sendNotification(user, 'budget_overrun', {
+      subject,
+      title: 'Budget Overrun Alert',
+      intro: `Your spending in ${category} has exceeded the monthly budget limit.`,
+      content,
+      highlightTitle: category,
+      highlightContent: `
+        <div>Budget: <strong>${limit}</strong></div>
+        <div>Spent: <strong>${spent}</strong></div>
+        <div style="margin-top:8px;font-weight:700;color:#ef4444;">Overrun by: ${overrun}</div>
+      `,
+    });
+  }
+  async sendPasswordResetLink(user, token) {
+    const subject = 'Password Reset Request';
+    const resetUrl = `http://localhost:5500/reset-password.html?token=${token}`;
+    await this._sendNotification(user, 'password_reset_link', {
+      subject,
+      title: 'Reset Your Password',
+      intro: `Hi ${user.name}, we received a request to reset your password.`,
+      content: '<p style="margin:0 0 12px;">If you did not make this request, you can safely ignore this email. This link will expire securely in 15 minutes.</p>',
+      highlightTitle: 'Action Required',
+      highlightContent: `<div style="text-align: center; margin-top: 16px;"><a href="${resetUrl}" style="background-color: #d4a44c; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">Reset Password Now</a></div>`,
+      logMessage: 'Password reset secure token dispatched'
+    });
+  }
 }
 
 module.exports = new NotificationService();

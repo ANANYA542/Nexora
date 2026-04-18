@@ -35,7 +35,10 @@ app.use('/api/budgets',       budgetRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/ai',            aiRoutes);
 
-schedulerService.start();
+  require('./jobs/notificationProcessor');
+  schedulerService.start().catch(err => 
+    console.error('[SCHEDULER] Failed to start:', err.message)
+  );
 
 app.use((_req, res) => {
   res.status(404).json({ success: false, message: 'Route not found' });

@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const transactionRepository = require('../repositories/TransactionRepository');
 const categoryRepository = require('../repositories/CategoryRepository');
 const notificationService = require('./NotificationService');
@@ -125,6 +127,14 @@ class TransactionService {
       const curr = body.currency !== undefined ? body.currency : existing.currency;
       body.converted_amount = getConvertedAmount(amt, curr);
     }
+    if (existing.receipt_url) {
+      const receiptRemoved = !body.receipt_url;
+      const receiptReplaced = body.receipt_url && existing.receipt_url !== body.receipt_url;
+  
+    if (receiptRemoved || receiptReplaced) {
+      this._deleteReceiptFile(existing.receipt_url);
+    }
+}
 
     const updated = await transactionRepository.updateForUser(transactionId, userId, body);
     return updated;
@@ -136,7 +146,28 @@ class TransactionService {
     if (!deleted) {
       throw new AppError('Transaction not found', 404);
     }
+
+    // Delete the attached receipt off disk if it exists
+    if (deleted.receipt_url) {
+      this._deleteReceiptFile(deleted.receipt_url);
+    }
+
     return deleted;
+  }
+
+  _deleteReceiptFile(receiptUrl) {
+    if (!receiptUrl) return;
+    try {
+     
+   
+      const fileName = path.basename(receiptUrl);
+      const filePath = path.join(process.cwd(), 'uploads', 'receipts', fileName);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    } catch (err) {
+      console.error('[TRANSACTION] Failed to delete orphaned receipt file:', err.message);
+    }
   }
 }
 

@@ -1,50 +1,24 @@
-const notificationService = require('./NotificationService');
-
-const ONE_DAY = 24 * 60 * 60 * 1000;
-const ONE_WEEK = 7 * ONE_DAY;
+const notificationQueue = require('../../jobs/notificationQueue');
 
 class SchedulerService {
-  constructor() {
-    this.started = false;
-  }
-
-  start() {
-    if (this.started) {
-      return;
-    }
-
-    this.started = true;
-    console.log('[SCHEDULER] Started notification scheduler');
-
-   
-    setInterval(() => {
-      console.log('[SCHEDULER] Running daily checks...');
-      notificationService.runDailyChecks().catch(err =>
-        console.error('[SCHEDULER] Daily check error:', err.message)
-      );
-    }, ONE_DAY);
-
-
-    setInterval(() => {
-      console.log('[SCHEDULER] Sending weekly summaries...');
-      notificationService.sendWeeklySummaries().catch(err =>
-        console.error('[SCHEDULER] Weekly summary error:', err.message)
-      );
-    }, ONE_WEEK);
-
-
-    setInterval(() => {
-      const today = new Date();
-      if (today.getDate() === 1) {
-        console.log('[SCHEDULER] Sending monthly summaries and budget reminders...');
-        notificationService.sendMonthlySummaries().catch(err =>
-          console.error('[SCHEDULER] Monthly summary error:', err.message)
-        );
-        notificationService.sendNewMonthBudgetReminders().catch(err =>
-          console.error('[SCHEDULER] Budget reminder error:', err.message)
-        );
+  async start() {
+    try {
+      console.log('[SCHEDULER] Initializing Bull repeatable jobs...');
+      
+      const jobs = await notificationQueue.getRepeatableJobs();
+      for (const job of jobs) {
+        await notificationQueue.removeRepeatableByKey(job.key);
       }
-    }, ONE_DAY);
+
+      await notificationQueue.add('daily-checks', {}, { repeat: { cron: '0 9 * * *' } });
+      await notificationQueue.add('weekly-summary', {}, { repeat: { cron: '0 9 * * MON' } });
+      await notificationQueue.add('monthly-summary', {}, { repeat: { cron: '0 9 1 * *' } });
+
+      console.log('[SCHEDULER] Bull repeatable jobs registered successfully.');
+    } catch (err) {
+      console.error('[SCHEDULER] Failed to start:', err.message);
+      throw err;
+    }
   }
 }
 
