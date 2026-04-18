@@ -1,4 +1,5 @@
-const API_BASE = 'http://localhost:5003/api';
+const API_BASE = 'https://fj-be-r2-ananya-newton-school-of.onrender.com/api';
+
 
 function isAuthPage() {
   return window.location.pathname.includes('index.html') ||
