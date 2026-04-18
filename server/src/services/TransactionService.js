@@ -58,10 +58,20 @@ class TransactionService {
       );
     }
 
-    const converted_amount = getConvertedAmount(amount, currency);
+    // Negative amounts are only valid for expense refunds, not income
+    if (type === 'income' && amount < 0) {
+      throw new AppError(
+        'Income amount must be positive. To record a refund or reversal, use an expense transaction with a negative amount.',
+        400
+      );
+    }
+
+    // Always persist amounts as absolute values — the `type` column carries sign semantics
+    const absAmount = Math.abs(amount);
+    const converted_amount = Math.abs(getConvertedAmount(amount, currency));
 
     const transaction = await transactionRepository.create({ 
-      userId, category_id: categoryId, type, amount, currency, converted_amount, description, date, receipt_url 
+      userId, category_id: categoryId, type, amount: absAmount, currency, converted_amount, description, date, receipt_url 
     });
 
     notificationService.onTransactionCreated(userId, transaction).catch(() => {});
@@ -122,10 +132,28 @@ class TransactionService {
       }
     }
 
+    // Resolve final type and amount after partial update merge
+    const resolvedType = body.type !== undefined ? body.type : existing.type;
+    const resolvedAmount = body.amount !== undefined ? body.amount : parseFloat(existing.amount);
+
+    if (resolvedType === 'income' && resolvedAmount < 0) {
+      throw new AppError(
+        'Income amount must be positive. To record a refund or reversal, use an expense transaction with a negative amount.',
+        400
+      );
+    }
+
+    // Always resolve amounts as absolute values before persisting
+    const absResolvedAmount = Math.abs(resolvedAmount);
+
     if (body.amount !== undefined || body.currency !== undefined) {
-      const amt = body.amount !== undefined ? body.amount : existing.amount;
       const curr = body.currency !== undefined ? body.currency : existing.currency;
-      body.converted_amount = getConvertedAmount(amt, curr);
+      body.converted_amount = Math.abs(getConvertedAmount(absResolvedAmount, curr));
+    }
+
+    // Normalise the stored amount field itself to absolute
+    if (body.amount !== undefined) {
+      body.amount = absResolvedAmount;
     }
     if (existing.receipt_url) {
       const receiptRemoved = !body.receipt_url;
