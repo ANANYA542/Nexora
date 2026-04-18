@@ -196,14 +196,11 @@ async function loadDashboard() {
   try {
     let endpoint = `/dashboard?currency=${encodeURIComponent(currency)}`;
     
-    if (timeframe === 'this_month') {
-      const now = new Date();
-      const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-      endpoint += `&start_date=${start}`;
-    } else if (timeframe === 'last_month') {
-      const now = new Date();
-      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split('T')[0];
-      const end = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split('T')[0];
+    if (timeframe !== 'all') {
+      const year = new Date().getFullYear();
+      const monthIdx = parseInt(timeframe, 10);
+      const start = new Date(year, monthIdx - 1, 1).toISOString().split('T')[0];
+      const end = new Date(year, monthIdx, 0).toISOString().split('T')[0];
       endpoint += `&start_date=${start}&end_date=${end}`;
     }
 
@@ -279,13 +276,20 @@ async function loadBudgetAllocation() {
   const container = document.getElementById('budgetAllocation');
   container.innerHTML = '<div class="skeleton" style="height:60px;"></div>';
   try {
-    const date = new Date();
-    const res = await apiCall(`/budgets?month=${date.getMonth() + 1}&year=${date.getFullYear()}`);
+    const timeframe = document.getElementById('dashboardTimeframe') ? document.getElementById('dashboardTimeframe').value : 'all';
+    
+    let endpoint = '/budgets';
+    if (timeframe !== 'all') {
+      const year = new Date().getFullYear();
+      endpoint += `?month=${timeframe}&year=${year}`;
+    }
+
+    const res = await apiCall(endpoint);
     const budgets = res.data.budgets;
     localBudgetData = budgets;
     checkRenderHealthScore();
     if (budgets.length === 0) {
-      container.innerHTML = '<div class="empty-state">No budgets set for this month.</div>';
+      container.innerHTML = `<div class="empty-state">No budgets set for ${timeframe === 'all' ? 'any timeframe' : 'this month'}.</div>`;
       return;
     }
     container.innerHTML = '<ul class="budget-bars">' + budgets.map((b) => {
