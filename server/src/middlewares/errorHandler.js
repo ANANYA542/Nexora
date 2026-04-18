@@ -22,13 +22,27 @@ const errorHandler = (err, req, res, _next) => {
     });
   }
 
+  if (err.code === '42703' || err.code === '42P01') {
+    return res.status(500).json({
+      success: false,
+      message: 'Database schema is out of date. Run the latest migrations and try again.',
+      errors: null,
+    });
+  }
+
+  if (err.name === 'MulterError') {
+    return res.status(400).json({
+      success: false,
+      message: err.message,
+      errors: null,
+    });
+  }
+
   let errors = null;
   if (err.isOperational && err.statusCode === 400) {
     try {
       errors = JSON.parse(err.message);
-    } catch {
-      // plain string message
-    }
+    } catch {}
   }
 
   const statusCode = err.isOperational ? err.statusCode : 500;

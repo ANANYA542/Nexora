@@ -1,6 +1,6 @@
 const { z } = require('zod');
 
-// ── Auth ─────────────────────────────────────────────────────────────────────
+
 const registerSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters').max(100),
   email: z.string().email('Invalid email address'),
@@ -12,6 +12,10 @@ const loginSchema = z.object({
   password: z.string().min(1, 'Password is required'),
 });
 
+const googleLoginSchema = z.object({
+  id_token: z.string().min(1, 'Google ID token is required'),
+});
+
 const updateProfileSchema = z.object({
   name: z.string().min(2).max(100).optional(),
   current_password: z.string().optional(),
@@ -21,9 +25,9 @@ const updateProfileSchema = z.object({
   { message: 'Provide at least name or new_password to update' }
 );
 
-// ── Transactions ─────────────────────────────────────────────────────────────
+
 const createTransactionSchema = z.object({
-  category_id: z.string().uuid('Invalid category ID'),
+  category_id: z.string().uuid('Invalid category ID').optional(),
   type: z.enum(['income', 'expense']),
   amount: z.coerce
     .number({ invalid_type_error: 'Amount must be a number' })
@@ -35,6 +39,15 @@ const createTransactionSchema = z.object({
 
 const updateTransactionSchema = createTransactionSchema.partial();
 
+const balanceCheckSchema = z.object({
+  amount: z.coerce
+    .number({ invalid_type_error: 'Amount must be a number' })
+    .refine((v) => v !== 0, { message: 'Amount cannot be zero' }),
+  currency: z.string().max(10).optional().default('INR'),
+  type: z.enum(['income', 'expense']),
+  transaction_id: z.string().uuid('Invalid transaction ID').optional(),
+});
+
 const transactionFilterSchema = z.object({
   type: z.enum(['income', 'expense']).optional(),
   category_id: z.string().uuid().optional(),
@@ -44,40 +57,76 @@ const transactionFilterSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
-// ── Categories ───────────────────────────────────────────────────────────────
+
 const createCategorySchema = z.object({
   name: z.string().min(1).max(100),
   type: z.enum(['income', 'expense']),
 });
 
-// ── Budgets ──────────────────────────────────────────────────────────────────
-const upsertBudgetSchema = z.object({
-  category_id: z.string().uuid('Invalid category ID'),
-  limit_amount: z.number().positive('Budget limit must be positive'),
-  month: z.number().int().min(1).max(12),
-  year: z.number().int().min(2000),
+const uuidParamSchema = z.object({
+  id: z.string().uuid('Invalid ID'),
 });
 
-// ── Dashboard ────────────────────────────────────────────────────────────────
+
+const upsertBudgetSchema = z.object({
+  category_id: z.string().uuid('Invalid category ID'),
+  limit_amount: z.coerce.number().positive('Budget limit must be positive'),
+  month: z.coerce.number().int().min(1).max(12),
+  year: z.coerce.number().int().min(2000),
+});
+
+const budgetFilterSchema = z.object({
+  month: z.coerce.number().int().min(1).max(12).optional(),
+  year: z.coerce.number().int().min(2000).optional(),
+});
+
+
 const dashboardQuerySchema = z.object({
   start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  currency: z.enum(['INR', 'USD', 'EUR', 'GBP']).optional().default('INR'),
 });
 
-// ── Reports ──────────────────────────────────────────────────────────────────
+
 const reportQuerySchema = z.object({
   year: z.coerce.number().int().min(2000).optional(),
+});
+
+const aiChatSchema = z.object({
+  message: z.string().min(1, 'Message is required').max(2000),
+});
+
+const aiCategorizeSchema = z.object({
+  description: z.string().min(1, 'Description is required').max(500),
+  type: z.enum(['income', 'expense']).default('expense'),
+});
+
+const aiReportSummaryQuerySchema = z.object({
+  month: z.coerce.number().int().min(1).max(12),
+  year: z.coerce.number().int().min(2000),
+});
+
+const aiBudgetSuggestionQuerySchema = z.object({
+  category_id: z.string().uuid('Invalid category ID'),
 });
 
 module.exports = {
   registerSchema,
   loginSchema,
+  googleLoginSchema,
   updateProfileSchema,
   createTransactionSchema,
   updateTransactionSchema,
+  balanceCheckSchema,
   transactionFilterSchema,
   createCategorySchema,
+  uuidParamSchema,
   upsertBudgetSchema,
+  budgetFilterSchema,
   dashboardQuerySchema,
   reportQuerySchema,
+  aiChatSchema,
+  aiCategorizeSchema,
+  aiReportSummaryQuerySchema,
+  aiBudgetSuggestionQuerySchema,
 };
