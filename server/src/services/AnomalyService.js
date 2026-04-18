@@ -193,7 +193,7 @@ class AnomalyService {
       '',
       `Reason it was flagged: ${flagReasons.join('; ')}`,
       '',
-      'In exactly 2 sentences: explain which statistical checks flagged this transaction and why the amount looks unusual compared to the user\\'s history. Reference the actual numbers. Be conversational and specific, not alarming.'
+      `In exactly 2 sentences: explain which statistical checks flagged this transaction and why the amount looks unusual compared to the user's history. Reference the actual numbers. Be conversational and specific, not alarming.`
     ].join('\n');
 
     try {
