@@ -27,7 +27,7 @@ The monolithic backend strictly adheres to a Model-View-Controller (MVC) archite
 
 ```mermaid
 graph TD
-    Client["🌐 Client Browser"] --> API["Express.js API"]
+    Client[" Client Browser"] --> API["Express.js API"]
     
     subgraph Backend Core
         API --> Services["Services (Business Logic)"]
@@ -52,35 +52,101 @@ Every layer has a single responsibility. Controllers never touch the database. R
 
 ## 2. Database Design (ER Diagram)
 
-The schema is fully normalized to 3NF. Financial amounts use NUMERIC(15,2) throughout — never FLOAT — to prevent floating point errors in monetary calculations.
+The schema is fully normalized to 3NF. Financial amounts use NUMERIC(12,2) throughout — never FLOAT — to prevent floating point errors in monetary calculations.
 
 ```mermaid
 erDiagram
-    USERS ||--o{ TRANSACTIONS : "owns"
-    USERS ||--o{ BUDGETS : "sets"
-    CATEGORIES ||--o{ TRANSACTIONS : "tags"
-    CATEGORIES ||--o{ BUDGETS : "scoped to"
+    USERS {
+        UUID id PK
+        VARCHAR name
+        VARCHAR email UK
+        TEXT password_hash
+        TEXT google_id UK
+        TEXT auth_provider
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+    }
+
+    CATEGORIES {
+        UUID id PK
+        VARCHAR name
+        VARCHAR type
+        UUID user_id FK
+        BOOLEAN is_deleted
+    }
 
     TRANSACTIONS {
-        numeric amount
-        numeric converted_amount
-        boolean is_anomaly
+        UUID id PK
+        UUID user_id FK
+        UUID category_id FK
+        VARCHAR type
+        NUMERIC amount
+        VARCHAR currency
+        NUMERIC converted_amount
+        TEXT description
+        DATE date
+        VARCHAR receipt_url
+        BOOLEAN is_anomaly
+        TEXT anomaly_reason
+        TIMESTAMPTZ created_at
     }
-    
+
     BUDGETS {
-        numeric monthly_limit
-        integer month
-        integer year
+        UUID id PK
+        UUID user_id FK
+        UUID category_id FK
+        NUMERIC limit_amount
+        SMALLINT month
+        SMALLINT year
+        TIMESTAMPTZ created_at
     }
+
+    NOTIFICATION_LOG {
+        UUID id PK
+        UUID user_id FK
+        VARCHAR type
+        TEXT message
+        TIMESTAMPTZ sent_at
+    }
+
+    AI_RECOMMENDATIONS {
+        UUID id PK
+        UUID user_id FK
+        VARCHAR type
+        JSONB content
+        JSONB metadata
+        BOOLEAN is_read
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+    }
+
+    PASSWORD_RESET_TOKENS {
+        UUID id PK
+        UUID user_id FK
+        VARCHAR token_hash
+        TIMESTAMPTZ expires_at
+        TIMESTAMPTZ created_at
+    }
+
+    USERS ||--o{ CATEGORIES : "creates"
+    USERS ||--o{ TRANSACTIONS : "owns"
+    USERS ||--o{ BUDGETS : "sets"
+    USERS ||--o{ NOTIFICATION_LOG : "receives"
+    USERS ||--o{ AI_RECOMMENDATIONS : "receives"
+    USERS ||--o{ PASSWORD_RESET_TOKENS : "requests"
+    CATEGORIES ||--o{ TRANSACTIONS : "classifies"
+    CATEGORIES ||--o{ BUDGETS : "scoped to"
 ```
 
 | Decision | Implementation | Why |
 |---|---|---|
-| Decimal precision | NUMERIC(15,2) | Prevents float rounding in financial math |
-| Soft deletes | is_deleted on categories | Preserves transaction history |
+| Decimal precision | NUMERIC(12,2) | Prevents float rounding in financial math |
+| Soft deletes | is_deleted on categories | Preserves transaction history for FK integrity |
 | Currency normalization | converted_amount in INR | Enables cross-currency SQL aggregations |
 | Anomaly storage | is_anomaly + anomaly_reason on transactions | No separate table needed, instant join |
-| AI recommendations | Separate table with JSONB metadata | Flexible metadata per recommendation type |
+| AI recommendations | Separate table with JSONB content + metadata | Flexible schema per recommendation type |
+| Notification log | Separate table with type + sent_at | Deduplication checks and audit trail |
+| Budget uniqueness | UNIQUE(user_id, category_id, month, year) | Prevents duplicate budgets per category per month |
 
 ---
 
@@ -145,9 +211,11 @@ Utilizes the `UserRepository` to isolate raw SQL bindings, parsing business logi
 | POST | /api/auth/register | No | Creates a new secure user record |
 | POST | /api/auth/login | No | Validates credentials and maps to JWT |
 | GET | /api/auth/me | Yes | Retrieves current user profile |
+REGISTER TEST
+> [api_testing_Screenshots/postman_register.png]
+LOGIN TEST
+> [api_testing_Screenshots/postman_login.png]
 
-> 📸 _Screenshot: Authentication payload and JWT issuance validation_
-> `[Attach: postman_login.png]`
 
 ### 4.2 Database Structure & Models
 **Rubric mapping:** code readability, logic, documentation
@@ -167,8 +235,7 @@ Constructed using raw SQL migrations instead of an ORM to perfectly optimize com
 |---|---|---|---|
 | POST | /api/migrations/run | Yes | Explicit DB setup scripts execution |
 
-> 📸 _Screenshot: PostgreSQL tables generated successfully_
-> `[Attach: postgres_tables.png]`
+
 
 ### 4.3 Transaction Management
 **Rubric mapping:** functionality, logic, code efficiency
@@ -191,8 +258,11 @@ Endpoints intercept the `TransactionService` to enforce balance guarding and tri
 | POST | /api/transactions | Yes | Commits an immutable transaction row |
 | GET | /api/transactions | Yes | Fetches securely paginated transactions |
 
-> 📸 _Screenshot: Active transaction POST request logging receipt strings_
-> `[Attach: postman_create_tx.png]`
+
+POSTMAN TESTING FOR TRANSACTION MANAGEMENT
+> [api_testing_Screenshots/post_expense_transaction.png]
+>   [api_testing_Screenshots/post_income_transaction.png]
+>   [api_testing_Screenshots/get_transaction.png]
 
 ### 4.4 Dashboard
 **Rubric mapping:** user experience, functionality
@@ -212,8 +282,8 @@ Leverages raw SQL `SUM` and `COALESCE` statements natively inside `DashboardRepo
 |---|---|---|---|
 | GET | /api/dashboard | Yes | Emits real-time native SQL aggregates |
 
-> 📸 _Screenshot: Dashboard UI successfully rendering metrics natively_
-> `[Attach: dashboard_canvas.png]`
+POSTMAN TESTING FOR DASHBOARD
+>[api_testing_Screenshots/dashboard.png]
 
 ### 4.5 Reporting
 **Rubric mapping:** functionality, logic
@@ -232,8 +302,8 @@ Implemented entirely via SQL `GROUP BY EXTRACT(MONTH/YEAR)` constraints inside `
 |---|---|---|---|
 | GET | /api/reports/monthly | Yes | Emits rigid structural month clusters |
 
-> 📸 _Screenshot: Backend structurally responding with precise monthly aggregates_
-> `[Attach: reports_api.png]`
+POSTMAN TESTING FOR REPORTING
+>[api_testing_Screenshots/get_monthly_report.png]
 
 ### 4.6 Budgeting
 **Rubric mapping:** functionality, logic, user experience
@@ -254,8 +324,13 @@ The `BudgetService` validates UPSERT constraints cleanly directly against Postgr
 | POST | /api/budgets | Yes | Registers hard spending thresholds |
 | GET | /api/budgets | Yes | Calculates explicit limit vs expenditure ratios |
 
-> 📸 _Screenshot: Budget tracker tracking % consumed relative to limit_
-> `[Attach: budget_UI.png]`
+> POSTMAN TESTING FOR BUDGETING
+>[api_testing_Screenshots/set_budget.png]
+>[api_testing_Screenshots/get_budget.png]
+
+>[api_testing_Screenshots/delete_budget.png]
+
+
 
 ### 4.7 Google OAuth Integration
 **Rubric mapping:** extra initiative, functionality
@@ -273,8 +348,7 @@ Delegated natively to standard OAuth2 protocols safely catching redirects in `Au
 |---|---|---|---|
 | GET | /api/auth/google | No | Triggers Native OAuth prompt |
 
-> 📸 _Screenshot: Google consent screen intercepting natively_
-> `[Attach: oauth_dialog.png]`
+
 
 ### 4.8 Notification System (Redis + Bull)
 **Rubric mapping:** code efficiency, extra initiative, logic
@@ -306,9 +380,6 @@ flowchart TD
 |---|---|---|---|
 | POST | /api/notifications/run | Yes | Explicitly forces queue iteration natively |
 
-> 📸 _Screenshot: Bull Queue correctly dispatching SendGrid payloads_
-> `[Attach: bull_terminal.png]`
-
 ### 4.9 Receipt Uploading
 **Rubric mapping:** functionality, extra initiative
 
@@ -329,8 +400,6 @@ Utilizes `multer` precisely to parse HTTP boundaries naturally saving streams st
 |---|---|---|---|
 | POST | /api/transactions/upload | Yes | Reads `multipart/form-data` |
 
-> 📸 _Screenshot: Local file system storing structurally uniquely named images_
-> `[Attach: multer_receipts.png]`
 
 ### 4.10 Multiple Currencies
 **Rubric mapping:** logic, functionality, extra initiative
@@ -351,8 +420,7 @@ Intervenes natively completely during the original `INSERT` actively tracking ex
 |---|---|---|---|
 | GET | /api/dashboard?currency=USD | Yes | Normalizes native SQL correctly |
 
-> 📸 _Screenshot: Dashboard dropdown correctly multiplying against USD coefficients_
-> `[Attach: currency_switch.png]`
+
 
 ---
 
@@ -366,47 +434,39 @@ I chose Groq over OpenAI for inference speed. For real-time features like auto-c
 What: Maps raw user descriptions strictly cleanly directly into their personal exact database categories instantly.
 How: The LLM conditionally injects explicitly exclusively their exact native database categories into its systemic logic instructions cleanly avoiding generic suggestions.
 Key detail: Injects user's actual DB categories into prompt — not a generic list. Maps to THEIR specific category.
-> 📸 _Screenshot: API successfully mapping 'Spotify' to 'Entertainment'_
-> `[Attach: categorization.png]`
+
 
 #### 5.1.2 Multimodal Receipt Parsing (Vision)
 What: Upload receipt image → auto-fill transaction form.
 How: Multer reads file → base64 encode → Groq Vision model → structured JSON returned.
 Key detail: Uses vision model not text model — genuinely reads the image.
-> 📸 _Screenshot: Visual JSON extraction automatically filling amounts_
-> `[Attach: receipt-ocr.png]`
+
 
 #### 5.1.3 Generative Anomaly Explanations
 What: Converts raw math stats into personalized email copy.
 How: Statistical engine flags → raw numbers sent to LLM → 2-sentence human explanation generated.
 Key detail: Math catches it. AI explains it. Two separate concerns deliberately.
-> 📸 _Screenshot: AI successfully injecting 2 sentences explicitly explaining huge expense_
-> `[Attach: anomaly-email.png]`
+
 
 #### 5.1.4 Interactive Financial Chat Advisor
 What: Natural language Q&A about the user's actual finances.
 How: Every message injects real DB context as system prompt.
 Key detail: Answers are grounded in real balance/budget/transaction data — not generic financial advice.
-> 📸 _Screenshot: Advisor dynamically returning conversational context strictly relying closely upon specific balances_
-> `[Attach: chat-advisor.png]`
+
 
 #### 5.1.5 Spending Pattern Analysis
 What: Identifies behavioral trends from transaction timing data.
 How: SQL aggregates day-of-week, week-of-month, MoM shifts → fed to LLM for 4-section analysis.
-> 📸 _Screenshot: AI explicitly pinpointing weekend expenditure peaks mathematically naturally_
-> `[Attach: pattern-analysis.png]`
+
 
 #### 5.1.6 Budget Recommendations
 What: Specific INR budget adjustment suggestions.
 How: 6 months category data → LLM returns [OPTIMIZE] / [CREATE] / [REALLOCATE] tagged recommendations.
-> 📸 _Screenshot: System actively suggesting cutting explicitly 2000 INR from dynamically specified Category natively_
-> `[Attach: budget-rec.png]`
+
 
 #### 5.1.7 Monthly Narrative Reports
 What: Plain-English 4-paragraph monthly financial summary.
 How: Month's SQL aggregations → LLM generates narrative.
-> 📸 _Screenshot: Perfectly formatted narrative output_
-> `[Attach: monthly-report.png]`
 
 ---
 
@@ -453,60 +513,10 @@ flowchart LR
     DB --> UI["Client Dashboard Feed"]
 ```
 
-> 📸 _Screenshot: Dedicated Paginated Insights Feed perfectly caching native recommendations_
-> `[Attach: recommendations-feed.png]`
+
 
 ---
 
-## 6. API Reference & Testing Screenshots
-
-All endpoints were tested via Postman natively explicitly correctly. Screenshots of every endpoint test are in the `/screenshots` directory of this repository natively properly gracefully.
-
-### Authentication APIs
-| Method | Endpoint | Auth Required | Screenshot |
-|---|---|---|---|
-| POST | /api/auth/register | No | 📸 register.png |
-| POST | /api/auth/login | No | 📸 login.png |
-| GET | /api/auth/google | No | 📸 oauth.png |
-| GET | /api/auth/me | Yes | 📸 profile.png |
-| PUT | /api/auth/profile | Yes | 📸 update-profile.png |
-
-### Transaction APIs
-| Method | Endpoint | Auth Required | Screenshot |
-|---|---|---|---|
-| GET | /api/transactions | Yes | 📸 get-transactions.png |
-| POST | /api/transactions | Yes | 📸 create-transaction.png |
-| PUT | /api/transactions/:id | Yes | 📸 update-transaction.png |
-| DELETE | /api/transactions/:id | Yes | 📸 delete-transaction.png |
-| GET | /api/transactions/anomalies | Yes | 📸 anomalies.png |
-| POST | /api/transactions/check-balance | Yes | 📸 balance-check.png |
-
-### Budget APIs
-| Method | Endpoint | Auth Required | Screenshot |
-|---|---|---|---|
-| GET | /api/budgets | Yes | 📸 get-budgets.png |
-| POST | /api/budgets | Yes | 📸 create-budget.png |
-| PUT | /api/budgets/:id | Yes | 📸 update-budget.png |
-| DELETE | /api/budgets/:id | Yes | 📸 delete-budget.png |
-
-### Reports APIs
-| Method | Endpoint | Auth Required | Screenshot |
-|---|---|---|---|
-| GET | /api/reports/monthly | Yes | 📸 monthly-report.png |
-| GET | /api/reports/summary | Yes | 📸 summary.png |
-
-### AI APIs
-| Method | Endpoint | Auth Required | Screenshot |
-|---|---|---|---|
-| POST | /api/ai/categorize | Yes | 📸 categorize.png |
-| POST | /api/ai/chat | Yes | 📸 chat.png |
-| POST | /api/ai/budget-recommendations | Yes | 📸 budget-rec.png |
-| POST | /api/ai/spending-patterns | Yes | 📸 patterns.png |
-| POST | /api/ai/income-insights | Yes | 📸 income.png |
-| POST | /api/ai/monthly-report | Yes | 📸 ai-report.png |
-| GET | /api/ai/recommendations | Yes | 📸 rec-feed.png |
-
----
 
 ## 7. Tech Stack
 
@@ -558,36 +568,6 @@ npm run migrate
 npm run dev
 ```
 
-### Environment Variables
-
-```env
-# Database
-DATABASE_URL=postgresql://user:password@localhost:5432/finance_tracker
-
-# Authentication  
-JWT_SECRET=your_jwt_secret_here
-JWT_EXPIRES_IN=7d
-
-# Google OAuth
-GOOGLE_CLIENT_ID=your_google_client_id
-GOOGLE_CLIENT_SECRET=your_google_client_secret
-GOOGLE_CALLBACK_URL=http://localhost:5500/api/auth/google/callback
-
-# Redis
-REDIS_URL=redis://default:password@host:port
-
-# AI
-GROQ_API_KEY=your_groq_api_key
-
-# Email
-SENDGRID_API_KEY=your_sendgrid_api_key
-SENDGRID_FROM_EMAIL=your_verified_sender@email.com
-
-# App
-PORT=5500
-NODE_ENV=development
-CLIENT_URL=http://localhost:3000
-```
 
 ---
 
