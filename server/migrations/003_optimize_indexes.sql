@@ -1,6 +1,15 @@
 
-ALTER TABLE categories
-  ADD CONSTRAINT categories_id_type_key UNIQUE (id, type);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'categories_id_type_key'
+  ) THEN
+    ALTER TABLE categories
+      ADD CONSTRAINT categories_id_type_key UNIQUE (id, type);
+  END IF;
+END $$;
 
 
 ALTER TABLE transactions

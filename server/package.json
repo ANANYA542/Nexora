@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "db:migrate": "psql -U $DB_USER -d $DB_NAME -f migrations/001_initial_schema.sql"
+    "db:migrate": "node migrate_all.js"
   },
   "keywords": [
     "finance",
@@ -19,11 +19,15 @@
   "license": "ISC",
   "dependencies": {
     "@sendgrid/mail": "^8.1.6",
+    "axios": "^1.6.8",
     "bcryptjs": "^2.4.3",
+    "bull": "^4.16.5",
+    "cors": "^2.8.5",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-validator": "^7.3.2",
     "google-auth-library": "^10.6.2",
+    "ioredis": "^5.10.1",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.1.1",
     "pg": "^8.20.0",
