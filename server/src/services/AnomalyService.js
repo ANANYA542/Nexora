@@ -11,88 +11,128 @@ const DUPLICATE_WINDOW_HOURS = 48;
 
 class AnomalyService {
 
-
   async detectAnomaly(transaction, userId) {
     try {
       const categoryId = transaction.category_id;
       const amount = Math.abs(parseFloat(transaction.amount));
       const txDate = transaction.date || new Date().toISOString().split('T')[0];
 
+      const stats = await this._getCategoryStats(userId, categoryId, transaction.id);
 
-      const stats = await this._getCategoryStats(userId, categoryId);
+      let ensembleTriggered = false;
+      let zScoreFlag = false;
+      let iqrFlag = false;
+      let rollingFlag = false;
+      let zScore = null;
+      let upperBound = null;
+      let flagCount = 0;
 
-
-      if (stats.transaction_count < MIN_TRANSACTIONS_FOR_CHECK) {
-        return { isAnomaly: false, explanation: null };
-      }
-
-      const avg = parseFloat(stats.avg_amount);
-      const stddev = parseFloat(stats.stddev_amount);
-      const maxAmount = parseFloat(stats.max_amount);
       const flagReasons = [];
 
+      const totalCount = parseInt(stats.total_count, 10);
 
-      if (stddev > 0 && amount > avg + STDDEV_MULTIPLIER * stddev) {
-        flagReasons.push(
-          `Amount ${amount.toFixed(2)} exceeds the statistical threshold of ${(avg + STDDEV_MULTIPLIER * stddev).toFixed(2)} (avg ${avg.toFixed(2)} + 2× std dev ${stddev.toFixed(2)})`
-        );
+      if (totalCount >= MIN_TRANSACTIONS_FOR_CHECK) {
+        const mean = parseFloat(stats.mean) || 0;
+        const stddev = stats.stddev !== null ? parseFloat(stats.stddev) : null;
+        const q1 = parseFloat(stats.q1);
+        const q3 = parseFloat(stats.q3);
+        const recentAvg = stats.recent_avg !== null ? parseFloat(stats.recent_avg) : null;
+
+        // CHECK 1 — Z-Score
+        if (stddev !== null && stddev > 0) {
+          zScore = (amount - mean) / stddev;
+          if (zScore > 2.5) {
+            zScoreFlag = true;
+            flagCount++;
+          }
+        }
+
+        // CHECK 2 — IQR
+        if (q1 !== null && q3 !== null && q1 !== q3) {
+          const iqr = q3 - q1;
+          upperBound = q3 + (1.5 * iqr);
+          if (amount > upperBound) {
+            iqrFlag = true;
+            flagCount++;
+          }
+        }
+
+        // CHECK 3 — Rolling Average
+        if (recentAvg !== null && recentAvg > 0) {
+          if (amount > recentAvg * 3) {
+            rollingFlag = true;
+            flagCount++;
+          }
+        }
+
+        console.log('[ANOMALY] Checks:', { zScoreFlag, iqrFlag, rollingFlag, flagCount });
+
+        if (flagCount >= 2) {
+          ensembleTriggered = true;
+          if (zScoreFlag) flagReasons.push(`Z-Score check triggered (score: ${zScore.toFixed(2)}, threshold: 2.5)`);
+          if (iqrFlag) flagReasons.push(`IQR check triggered (amount: ${amount.toFixed(2)}, upper bound: ${upperBound.toFixed(2)})`);
+          if (rollingFlag) flagReasons.push(`Rolling 30-day avg check triggered (amount: ${amount.toFixed(2)}, 3x rolling avg: ${(recentAvg * 3).toFixed(2)})`);
+        }
       }
 
-
-      if (maxAmount > 0 && amount > MAX_AMOUNT_MULTIPLIER * maxAmount) {
-        flagReasons.push(
-          `Amount ${amount.toFixed(2)} is more than 3× the highest recorded amount in this category (${maxAmount.toFixed(2)})`
-        );
-      }
-
-
+      // Standalone Duplicate Check
       const isDuplicate = await this._checkDuplicate(userId, categoryId, amount, txDate, transaction.id);
       if (isDuplicate) {
-        flagReasons.push(
-          `A transaction with the same amount (${amount.toFixed(2)}) in the same category was recorded within the last 48 hours`
-        );
+        flagReasons.push(`A transaction with the same amount (${amount.toFixed(2)}) in the same category was recorded within the last 48 hours`);
       }
 
-      if (flagReasons.length === 0) {
+      if (!ensembleTriggered && !isDuplicate) {
         return { isAnomaly: false, explanation: null };
       }
 
-
       const categoryName = await this._getCategoryName(categoryId);
+      const rawAiExplanation = await this._getAIExplanation(transaction, categoryName, stats, flagReasons, {
+        zScoreFlag, zScore, iqrFlag, upperBound, rollingFlag, flagCount
+      });
 
+      // DB update string formatting
+      let finalExplanation = rawAiExplanation;
+      if (ensembleTriggered) {
+        const prefix = `[Z-Score: ${zScoreFlag ? '✓' : '✗'} | IQR: ${iqrFlag ? '✓' : '✗'} | Rolling Avg: ${rollingFlag ? '✓' : '✗'}] `;
+        finalExplanation = prefix + rawAiExplanation;
+      } else if (isDuplicate) {
+        finalExplanation = "[Duplicate Flag] " + rawAiExplanation;
+      }
 
-      const explanation = await this._getAIExplanation(transaction, categoryName, stats, flagReasons);
+      await this._markAsAnomaly(transaction.id, finalExplanation);
 
+      const user = await userRepository.findById(userId);
+      if (user) {
+        const notificationQueue = require('../../jobs/notificationQueue');
+        notificationQueue.add('anomaly-alert', { user, transaction, explanation: finalExplanation }).catch(console.error);
+      }
 
-      await this._markAsAnomaly(transaction.id, explanation);
-
-
-      this._sendAnomalyEmail(userId, transaction, categoryName, explanation);
-
-      return { isAnomaly: true, explanation };
+      return { isAnomaly: true, explanation: finalExplanation };
     } catch (err) {
       console.error('[ANOMALY] Detection failed:', err.message);
       return { isAnomaly: false, explanation: null };
     }
   }
 
-
-  async _getCategoryStats(userId, categoryId) {
+  async _getCategoryStats(userId, categoryId, excludeTxId) {
     const { rows } = await pool.query(
       `SELECT
-         COALESCE(AVG(ABS(amount)), 0) AS avg_amount,
-         COALESCE(STDDEV_POP(ABS(amount)), 0) AS stddev_amount,
-         COALESCE(MAX(ABS(amount)), 0) AS max_amount,
-         COUNT(*) AS transaction_count
+         PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY amount) as q1,
+         PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY amount) as q3,
+         AVG(amount) as mean,
+         STDDEV(amount) as stddev,
+         AVG(CASE WHEN date >= NOW() - INTERVAL '30 days' 
+             THEN amount END) as recent_avg,
+         COUNT(*) as total_count
        FROM transactions
        WHERE user_id = $1
          AND category_id = $2
-         AND date >= CURRENT_DATE - INTERVAL '3 months'`,
-      [userId, categoryId]
+         AND type = 'expense'
+         AND id != $3`,
+      [userId, categoryId, excludeTxId]
     );
     return rows[0];
   }
-
 
   async _checkDuplicate(userId, categoryId, amount, txDate, excludeId) {
     const { rows } = await pool.query(
@@ -108,7 +148,6 @@ class AnomalyService {
     return parseInt(rows[0].count, 10) > 0;
   }
 
-
   async _getCategoryName(categoryId) {
     const { rows } = await pool.query(
       'SELECT name FROM categories WHERE id = $1 LIMIT 1',
@@ -117,13 +156,18 @@ class AnomalyService {
     return rows[0] ? rows[0].name : 'Unknown';
   }
 
-
-  async _getAIExplanation(transaction, categoryName, stats, flagReasons) {
+  async _getAIExplanation(transaction, categoryName, stats, flagReasons, ensembleData) {
     const amount = Math.abs(parseFloat(transaction.amount));
-    const avg = parseFloat(stats.avg_amount);
-    const stddev = parseFloat(stats.stddev_amount);
-    const maxAmount = parseFloat(stats.max_amount);
-    const count = parseInt(stats.transaction_count, 10);
+    const mean = stats.mean !== null ? parseFloat(stats.mean).toFixed(2) : 'N/A';
+    const stddev = stats.stddev !== null ? parseFloat(stats.stddev).toFixed(2) : 'N/A';
+    const q1 = stats.q1 !== null ? parseFloat(stats.q1).toFixed(2) : 'N/A';
+    const q3 = stats.q3 !== null ? parseFloat(stats.q3).toFixed(2) : 'N/A';
+    const recentAvg = stats.recent_avg !== null ? parseFloat(stats.recent_avg).toFixed(2) : 'N/A';
+    const totalCount = parseInt(stats.total_count, 10);
+
+    const threeX = stats.recent_avg !== null ? (parseFloat(stats.recent_avg) * 3).toFixed(2) : 'N/A';
+    const zScoreVal = ensembleData.zScore !== null ? ensembleData.zScore.toFixed(2) : 'N/A';
+    const upperBoundVal = ensembleData.upperBound !== null ? ensembleData.upperBound.toFixed(2) : 'N/A';
 
     const userMessage = [
       'A transaction has been statistically flagged as unusual.',
@@ -133,18 +177,23 @@ class AnomalyService {
       `- Category: ${categoryName}`,
       `- Amount: ${amount.toFixed(2)} ${transaction.currency || 'INR'}`,
       `- Date: ${transaction.date}`,
-      `- Transaction type: ${transaction.type}`,
       '',
-      'This user\'s category statistics (last 3 months):',
-      `- Average transaction amount: ${avg.toFixed(2)}`,
-      `- Typical range: ${Math.max(0, avg - stddev).toFixed(2)} to ${(avg + stddev).toFixed(2)}`,
-      `- Highest ever recorded in this category: ${maxAmount.toFixed(2)}`,
-      `- Total transactions in this category: ${count}`,
+      'Anomaly detection results:',
+      `- Z-Score check: ${ensembleData.zScoreFlag ? 'triggered' : 'not triggered'} (score: ${zScoreVal}, threshold: 2.5)`,
+      `- IQR check: ${ensembleData.iqrFlag ? 'triggered' : 'not triggered'} (amount: ${amount.toFixed(2)}, upper bound: ${upperBoundVal})`,
+      `- Rolling 30-day average check: ${ensembleData.rollingFlag ? 'triggered' : 'not triggered'} (amount: ${amount.toFixed(2)}, 3x rolling average: ${threeX})`,
+      `- Checks triggered: ${ensembleData.flagCount} out of 3`,
+      '',
+      'Category statistics:',
+      `- Mean: ${mean}`,
+      `- Standard deviation: ${stddev}`,
+      `- Q1: ${q1}, Q3: ${q3}`,
+      `- 30-day rolling average: ${recentAvg}`,
+      `- Total transactions in category: ${totalCount}`,
       '',
       `Reason it was flagged: ${flagReasons.join('; ')}`,
       '',
-      'In exactly 2 sentences: explain why this looks unusual based on the actual numbers, and suggest whether the user should review it.',
-      'Do not use vague language. Reference the specific amounts.',
+      'In exactly 2 sentences: explain which statistical checks flagged this transaction and why the amount looks unusual compared to the user\\'s history. Reference the actual numbers. Be conversational and specific, not alarming.'
     ].join('\n');
 
     try {
@@ -167,14 +216,12 @@ class AnomalyService {
     }
   }
 
-
   async _markAsAnomaly(transactionId, explanation) {
     await pool.query(
       'UPDATE transactions SET is_anomaly = TRUE, anomaly_reason = $1 WHERE id = $2',
       [explanation, transactionId]
     );
   }
-
 
   _sendAnomalyEmail(userId, transaction, categoryName, explanation) {
     (async () => {
@@ -210,7 +257,6 @@ class AnomalyService {
       }
     })();
   }
-
 
   async getAnomalies(userId) {
     const { rows } = await pool.query(
