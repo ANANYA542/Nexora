@@ -44,6 +44,11 @@ class AuthService {
   }
 
   async updateProfile(userId, { name, current_password, new_password }) {
+    const currentUser = await userRepository.findById(userId);
+    if (!currentUser) {
+      throw new AppError('User not found', 404);
+    }
+
     const updates = {};
 
     if (name) {
@@ -51,17 +56,23 @@ class AuthService {
     }
 
     if (new_password) {
-      if (!current_password) {
-        throw new AppError('Current password is required to set a new password', 400);
+      const fullUser = await userRepository.findByEmail(currentUser.email);
+      if (!fullUser) {
+        throw new AppError('User not found', 404);
       }
-      const fullUser = await userRepository.findByEmail(
-        (await userRepository.findById(userId)).email
-      );
-      const match = await bcrypt.compare(current_password, fullUser.password_hash);
-      if (!match) {
-        throw new AppError('Current password is incorrect', 401);
+
+      if (!fullUser.password_hash) {
+        updates.password_hash = await bcrypt.hash(new_password, SALT_ROUNDS);
+      } else {
+        if (!current_password) {
+          throw new AppError('Current password is required to set a new password', 400);
+        }
+        const match = await bcrypt.compare(current_password, fullUser.password_hash);
+        if (!match) {
+          throw new AppError('Current password is incorrect', 401);
+        }
+        updates.password_hash = await bcrypt.hash(new_password, SALT_ROUNDS);
       }
-      updates.password_hash = await bcrypt.hash(new_password, SALT_ROUNDS);
     }
 
     if (Object.keys(updates).length === 0) {
@@ -69,18 +80,41 @@ class AuthService {
     }
 
     const updated = await userRepository.updateById(userId, updates);
+    if (!updated) {
+      throw new AppError('User not found', 404);
+    }
     return updated;
   }
 
   async googleLogin(idToken) {
-    const ticket = await googleClient.verifyIdToken({
-      idToken,
-      audience: process.env.GOOGLE_CLIENT_ID,
-    });
+    if (!process.env.GOOGLE_CLIENT_ID) {
+      throw new AppError('Google OAuth is not configured on the server', 500);
+    }
+
+    if (!idToken) {
+      throw new AppError('Google ID token is required', 400);
+    }
+
+    let ticket;
+    try {
+      ticket = await googleClient.verifyIdToken({
+        idToken,
+        audience: process.env.GOOGLE_CLIENT_ID,
+      });
+    } catch (_err) {
+      throw new AppError('Google sign-in could not be verified. Check the configured Google client ID and allowed origins.', 401);
+    }
 
     const payload = ticket.getPayload();
-    const { sub: googleId, email, name } = payload;
+    const { sub: googleId, email, name, email_verified: emailVerified } = payload;
 
+    if (!email || !googleId) {
+      throw new AppError('Google sign-in did not return a usable account identity', 401);
+    }
+
+    if (!emailVerified) {
+      throw new AppError('Your Google account email is not verified', 401);
+    }
 
     let user = await userRepository.findByGoogleId(googleId);
 
@@ -97,7 +131,6 @@ class AuthService {
   }
 
   _signToken(user) {
-
     return jwt.sign(
       { sub: user.id, email: user.email },
       process.env.JWT_SECRET,
