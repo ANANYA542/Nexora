@@ -5,6 +5,7 @@ const pool = require('../config/db');
 const { OAuth2Client } = require('google-auth-library');
 const userRepository = require('../repositories/UserRepository');
 const AppError = require('../utils/AppError');
+const { normalizeEmail, isValidEmail } = require('../utils/emailUtils');
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -12,19 +13,21 @@ const SALT_ROUNDS = 12;
 
 class AuthService {
   async register({ name, email, password }) {
-    const existing = await userRepository.findByEmail(email);
+    const normalizedEmail = normalizeEmail(email);
+    const existing = await userRepository.findByEmail(normalizedEmail);
     if (existing) {
       throw new AppError('Email is already registered', 409);
     }
 
     const password_hash = await bcrypt.hash(password, SALT_ROUNDS);
-    const user = await userRepository.create({ name, email, password_hash });
+    const user = await userRepository.create({ name, email: normalizedEmail, password_hash });
     const token = this._signToken(user);
     return { user, token };
   }
 
   async login({ email, password }) {
-    const user = await userRepository.findByEmail(email);
+    const normalizedEmail = normalizeEmail(email);
+    const user = await userRepository.findByEmail(normalizedEmail);
     if (!user) {
       throw new AppError('Invalid email or password', 401);
     }
@@ -90,7 +93,13 @@ class AuthService {
 
   async forgotPassword(email) {
     if (!email) throw new AppError('Email is required', 400);
-    const user = await userRepository.findByEmail(email);
+    const normalizedEmail = normalizeEmail(email);
+    
+    if (!isValidEmail(normalizedEmail)) {
+      throw new AppError('Please provide a valid email address', 400);
+    }
+
+    const user = await userRepository.findByEmail(normalizedEmail);
     if (!user) return true; // Pretend it succeeded always per normal security rules
 
     const token = crypto.randomBytes(32).toString('hex');
@@ -173,11 +182,12 @@ class AuthService {
     let user = await userRepository.findByGoogleId(googleId);
 
     if (!user) {
-      const existingByEmail = await userRepository.findByEmail(email);
+      const normalizedEmail = normalizeEmail(email);
+      const existingByEmail = await userRepository.findByEmail(normalizedEmail);
       if (existingByEmail) {
         throw new AppError('An account with this email already exists. Please log in with email and password.', 409);
       }
-      user = await userRepository.createGoogleUser({ name, email, googleId });
+      user = await userRepository.createGoogleUser({ name, email: normalizedEmail, googleId });
     }
 
     const token = this._signToken(user);
