@@ -72,6 +72,9 @@ class AuthService {
         if (!current_password) {
           throw new AppError('Current password is required to set a new password', 400);
         }
+        if (current_password === new_password) {
+          throw new AppError('New password cannot be the same as the current password', 400);
+        }
         const match = await bcrypt.compare(current_password, fullUser.password_hash);
         if (!match) {
           throw new AppError('Current password is incorrect', 401);

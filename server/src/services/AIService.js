@@ -103,7 +103,6 @@ class AIService {
     }
 
 
-
     const categoryDefinitions = {
       'Food': 'meals, groceries, restaurants, food delivery, snacks, beverages, dining out',
       'Transport': 'cab, auto, bus, train, metro, fuel, petrol, uber, ola, flight tickets, parking',
