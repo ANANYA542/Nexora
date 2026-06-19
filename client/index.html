@@ -1,48 +1,14 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Login | Finza</title>
-  <link rel="stylesheet" href="css/styles.css">
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
-</head>
-<body>
-  <div class="auth-wrapper">
-    <div class="auth-box">
-      <h2>Welcome to Finza</h2>
-      <p class="subtitle">Your personal finance tracker</p>
-      
-      <form id="loginForm">
-        <div class="form-group">
-          <label>Email Address</label>
-          <input type="email" id="email" required placeholder="user@example.com">
-        </div>
-        <div class="form-group">
-          <label>Password</label>
-          <input type="password" id="password" required placeholder="••••••••">
-          <div style="text-align: right; margin-top: 8px;">
-            <a href="forgot-password.html" style="font-size: 13px; color: #64748b; text-decoration: none; font-weight: 500;">Forgot password?</a>
-          </div>
-        </div>
-        <button type="submit" class="primary">Login</button>
-      </form>
-      
-      <div class="auth-separator">OR</div>
-      
-      <div id="g_id_onload"
-           data-client_id="201448844450-37ksnuseiv9grqoe9iuudpqtd4mkn2be.apps.googleusercontent.com"
-           data-context="signin"
-           data-ux_mode="popup"
-           data-callback="handleGoogleLogin"
-           data-auto_prompt="false">
-      </div>
-      <div class="g_id_signin" data-type="standard" data-shape="rectangular" data-theme="outline" data-size="large" style="display:flex; justify-content:center;"></div>
-      
-      <div class="auth-link">
-        Need an account? <a href="register.html">Register</a>
-      </div>
-    </div>
-  </div>
-  <script src="js/api.js?v=2"></script>
-  <script src="js/auth.js"></script>
-</body>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FinSight | AI-Powered Financial Operating System</title>
+    <meta name="description" content="FinSight is India's autonomous financial operating system. A unified intelligence layer that helps you automatically capture, track, predict, and optimize every rupee." />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
 </html>
