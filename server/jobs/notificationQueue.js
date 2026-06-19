@@ -1,6 +1,14 @@
 const Queue = require('bull');
 
-const notificationQueue = new Queue('notification', process.env.REDIS_URL, {
+const redisUrl = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
+const isTls = redisUrl.startsWith('rediss://');
+
+const notificationQueue = new Queue('notification', redisUrl, {
+  redis: isTls ? {
+    tls: {
+      rejectUnauthorized: false,
+    },
+  } : {},
   defaultJobOptions: {
     attempts: 3,
     backoff: {
