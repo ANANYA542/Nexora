@@ -12,6 +12,10 @@ const reportRoutes        = require('./src/routes/report.routes');
 const budgetRoutes        = require('./src/routes/budget.routes');
 const notificationRoutes  = require('./src/routes/notification.routes');
 const aiRoutes            = require('./src/routes/ai.routes');
+const goalRoutes          = require('./src/routes/goal.routes');
+const investmentRoutes    = require('./src/routes/investment.routes');
+const accountRoutes       = require('./src/routes/account.routes');
+const healthRoutes         = require('./src/routes/health.routes');
 const schedulerService    = require('./src/services/SchedulerService');
 
 const cors = require('cors');
@@ -34,6 +38,10 @@ app.use('/api/reports',       reportRoutes);
 app.use('/api/budgets',       budgetRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/ai',            aiRoutes);
+app.use('/api/goals',         goalRoutes);
+app.use('/api/investments',   investmentRoutes);
+app.use('/api/accounts',      accountRoutes);
+app.use('/api/health',        healthRoutes);
 
   require('./jobs/notificationProcessor');
   schedulerService.start().catch(err => 
