@@ -189,7 +189,7 @@ sequenceDiagram
 
 ---
 
-## 4. Part A — Core Features (Rubric Mapped)
+## 4. Core Features (Rubric Mapped)
 
 ### 4.1 User Authentication & Profile Management
 **Rubric mapping:** functionality, logic, code efficiency
@@ -656,24 +656,3 @@ Replace multer.diskStorage with multer.memoryStorage and stream directly to AWS 
 
 ---
 
-## Assignment Completion Checklist
-
-### Part A — Basic Task
-- [x] User Authentication (register, login, profile management)
-- [x] Google OAuth Integration
-- [x] Database Structure (normalized, NUMERIC precision)
-- [x] Transaction Management (add, edit, delete)
-- [x] Edge Cases (refunds, category deletion, decimal precision)
-- [x] Dashboard (graphical overview, real-time aggregations)
-- [x] Reporting (monthly income vs expense reports)
-- [x] Budgeting (goals, progress tracking, overrun alerts)
-- [x] Notification System (SendGrid + Bull + Redis)
-- [x] Receipt Uploading (JPG, PNG, PDF, SVG)
-- [x] Multiple Currencies (conversion, normalized storage)
-- [x] Deployment (live URL above)
-
-### Part B — Extra Credit
-- [x] AI Integration (7 distinct features via Groq Llama-3)
-- [x] Anomaly Detection (3-method ensemble, consensus logic)
-- [x] AI Recommendations Feed (paginated, persisted, read/unread)
-- [ ] Bank Statement Import (planned — see roadmap)
