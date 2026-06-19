@@ -194,7 +194,7 @@ class AIService {
     }
 
     if (!String(file.mimetype || '').startsWith('image/')) {
-      throw new AppError('Only image receipts are supported for AI extraction', 400);
+      throw new AppError('Only image receipts/screenshots are supported for AI extraction', 400);
     }
 
     const categories = await categoryRepository.findAllForUser(userId);
@@ -206,33 +206,83 @@ class AIService {
     const base64 = buffer.toString('base64');
     const dataUrl = `data:${file.mimetype};base64,${base64}`;
 
+    const prompt = [
+      'You are an expert receipt and UPI payment screenshot parser for a personal finance application.',
+      'Analyze this image carefully. It could be a retail store receipt, or an Indian mobile payment confirmation screenshot (from Google Pay, Paytm, PhonePe, Bhim, or other UPI apps).',
+      '',
+      'Extract the following fields in a JSON object:',
+      '- amount: the total paid amount as a number (e.g. 150.00). Clean it from currency symbols like ₹ or $.',
+      '- date: the payment date in YYYY-MM-DD format. If the date is not found or not clear, return the current date.',
+      '- merchant: the shop name, vendor, recipient name, or merchant name. (For UPI screenshot, this is the name of the person or merchant who was paid, e.g., "Swiggy", "Zomato", "Ram Ji General Store", or the recipient\'s name).',
+      `- suggested_category: pick the best matching category from this list: ${expenseCategoryNames.join(', ')}.`,
+      '',
+      'Category Matching Rules:',
+      '- If food/dining or Swiggy/Zomato, choose "Food".',
+      '- If cab/metro/Uber/Ola/fuel, choose "Transport".',
+      '- If electricity/wifi/recharge/utility, choose "Utilities".',
+      '- If rent, choose "Rent".',
+      '- If movies/Netflix/Spotify, choose "Entertainment".',
+      '- If doctor/medicine, choose "Healthcare".',
+      '- If clothing/electronics/Amazon/Flipkart, choose "Shopping".',
+      '- If nothing fits or you are unsure, choose "Other Expense".',
+      '',
+      'Return ONLY a valid JSON object. No explanation text, no backticks, no markdown blocks.',
+    ].join('\n');
+
     const content = await createVisionCompletion({
-      prompt: [
-        'You are a receipt data extractor for a personal finance application.',
-        'Analyze this receipt image carefully and extract the following fields.',
-        'Return a JSON object with exactly these keys: amount, date, merchant, suggested_category.',
-        '',
-        'Field rules:',
-        '- amount: the total amount paid (number only, no currency symbol)',
-        '- date: the transaction date in YYYY-MM-DD format. If not readable, leave as empty string.',
-        '- merchant: the store/business name on the receipt. If not readable, leave as empty string.',
-        `- suggested_category: pick the best match from this list: ${expenseCategoryNames.join(', ')}. If unsure, use "Other Expense".`,
-        '',
-        'Return ONLY valid JSON. No explanation text.',
-      ].join('\n'),
+      prompt,
       dataUrl,
     });
 
     const parsed = parseJsonResponse(content);
     if (!parsed) {
-      throw new AppError('Could not read receipt data from AI response', 502);
+      throw new AppError('Could not read receipt/screenshot data from AI response', 502);
     }
 
+    const parsedAmount = parseFloat(String(parsed.amount).replace(/[^0-9.]/g, ''));
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      throw new AppError('Could not extract a valid positive amount from the receipt or screenshot', 400);
+    }
+
+    let transactionDate = parsed.date ? new Date(parsed.date) : new Date();
+    if (isNaN(transactionDate.getTime())) {
+      transactionDate = new Date();
+    }
+    const dateStr = transactionDate.toISOString().split('T')[0];
+
+    // Find the category matching the suggested category
+    let finalCategory = categories.find(c => c.name.toLowerCase() === (parsed.suggested_category || '').toLowerCase() && c.type === 'expense');
+    if (!finalCategory) {
+      finalCategory = categories.find(c => c.name === 'Other Expense' && c.type === 'expense') || categories.find(c => c.type === 'expense');
+    }
+
+    if (!finalCategory) {
+      throw new AppError('No suitable category found to record transaction', 400);
+    }
+
+    const path = require('path');
+    const transactionService = require('./TransactionService');
+    const relativeReceiptUrl = `/uploads/${path.basename(file.path)}`;
+
+    const transaction = await transactionService.createTransaction(userId, {
+      type: 'expense',
+      amount: parsedAmount,
+      currency: 'INR',
+      description: parsed.merchant || 'UPI Screenshot Payment',
+      date: dateStr,
+      category_id: finalCategory.id,
+      receipt_url: relativeReceiptUrl
+    });
+
     return {
-      amount: parsed.amount || '',
-      date: parsed.date || '',
-      merchant: parsed.merchant || '',
-      suggested_category: parsed.suggested_category || '',
+      success: true,
+      transaction,
+      extracted: {
+        amount: parsedAmount,
+        date: dateStr,
+        merchant: parsed.merchant || '',
+        category: finalCategory.name
+      }
     };
   }
 
