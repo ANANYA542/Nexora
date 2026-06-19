@@ -1,20 +1,27 @@
-const notificationQueue = require('../../jobs/notificationQueue');
+const cron = require('node-cron');
+const backgroundJobService = require('./BackgroundJobService');
 
 class SchedulerService {
   async start() {
     try {
-      console.log('[SCHEDULER] Initializing Bull repeatable jobs...');
+      console.log('[SCHEDULER] Initializing node-cron repeatable jobs...');
       
-      const jobs = await notificationQueue.getRepeatableJobs();
-      for (const job of jobs) {
-        await notificationQueue.removeRepeatableByKey(job.key);
-      }
+      cron.schedule('0 9 * * *', () => {
+        console.log('[SCHEDULER] Running daily checks...');
+        backgroundJobService.runDailyChecks();
+      });
 
-      await notificationQueue.add('daily-checks', {}, { repeat: { cron: '0 9 * * *' } });
-      await notificationQueue.add('weekly-summary', {}, { repeat: { cron: '0 9 * * MON' } });
-      await notificationQueue.add('monthly-summary', {}, { repeat: { cron: '0 9 1 * *' } });
+      cron.schedule('0 9 * * MON', () => {
+        console.log('[SCHEDULER] Running weekly summary...');
+        backgroundJobService.runWeeklySummary();
+      });
 
-      console.log('[SCHEDULER] Bull repeatable jobs registered successfully.');
+      cron.schedule('0 9 1 * *', () => {
+        console.log('[SCHEDULER] Running monthly summary...');
+        backgroundJobService.runMonthlySummary();
+      });
+
+      console.log('[SCHEDULER] node-cron repeatable jobs registered successfully.');
     } catch (err) {
       console.error('[SCHEDULER] Failed to start:', err.message);
       throw err;

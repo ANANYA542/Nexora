@@ -43,7 +43,6 @@ app.use('/api/investments',   investmentRoutes);
 app.use('/api/accounts',      accountRoutes);
 app.use('/api/health',        healthRoutes);
 
-  require('./jobs/notificationProcessor');
   schedulerService.start().catch(err => 
     console.error('[SCHEDULER] Failed to start:', err.message)
   );

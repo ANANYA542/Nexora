@@ -103,8 +103,8 @@ class AnomalyService {
 
       const user = await userRepository.findById(userId);
       if (user) {
-        const notificationQueue = require('../../jobs/notificationQueue');
-        notificationQueue.add('anomaly-alert', { user, transaction, explanation: finalExplanation }).catch(console.error);
+        const backgroundJobService = require('./BackgroundJobService');
+        backgroundJobService.processAnomalyAlert(user, transaction, finalExplanation).catch(console.error);
       }
 
       return { isAnomaly: true, explanation: finalExplanation };
