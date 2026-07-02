@@ -5,8 +5,9 @@ import client from '../api/client';
 import {
   Search, SlidersHorizontal, ArrowUpRight, ArrowDownRight, Wallet,
   Upload, Plus, UtensilsCrossed, Briefcase, Zap, Globe, Car,
-  Heart, Home, ShoppingBag, CircleDot, ChevronDown
+  Heart, Home, ShoppingBag, CircleDot, ChevronDown, FileText
 } from 'lucide-react';
+import ImportStatementModal from '../components/transactions/ImportStatementModal';
 
 const ICON_MAP = {
   food: UtensilsCrossed, salary: Briefcase, bills: Zap,
@@ -27,6 +28,7 @@ export default function Transactions() {
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
   // Form states for new transaction
