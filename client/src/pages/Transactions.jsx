@@ -161,6 +161,12 @@ export default function Transactions() {
             <p className="page-subtitle">Track every rupee, every time</p>
           </div>
           <div className="page-header-actions">
+            <button 
+              className="btn btn-secondary" 
+              onClick={() => setShowImportModal(true)}
+            >
+              <Upload size={16} /> Import CSV/PDF
+            </button>
             <input 
               type="file" 
               id="receipt-upload-input" 
@@ -173,12 +179,22 @@ export default function Transactions() {
               onClick={handleUploadClick}
               disabled={isUploading}
             >
-              <Upload size={16} /> {isUploading ? 'Uploading...' : 'Upload'}
+              <FileText size={16} /> {isUploading ? 'Uploading...' : 'Scan Receipt'}
             </button>
             <button className="btn btn-dark" onClick={() => setShowAddModal(true)}><Plus size={16} /> Add</button>
           </div>
         </div>
       </div>
+
+      {showImportModal && (
+        <ImportStatementModal 
+          onClose={() => setShowImportModal(false)}
+          onImportSuccess={() => {
+            setShowImportModal(false);
+            fetchData();
+          }}
+        />
+      )}
 
       {loading ? (
         <div style={{ padding: '48px 0', textAlign: 'center', color: 'var(--text-secondary)' }}>

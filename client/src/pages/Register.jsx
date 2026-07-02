@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import client from '../api/client';
 import {
   Wallet, Mail, Lock, User, ShieldAlert, Globe, ArrowRight
 } from 'lucide-react';
+
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
 export default function Register() {
   const { login } = useAuth();
@@ -15,6 +17,7 @@ export default function Register() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -37,6 +40,58 @@ export default function Register() {
       setIsLoading(false);
     }
   };
+
+  const handleGoogleSignUp = useCallback(() => {
+    if (!GOOGLE_CLIENT_ID) {
+      setError('Google Sign-In is not configured. Please contact support.');
+      return;
+    }
+
+    setError(null);
+    setIsGoogleLoading(true);
+
+    try {
+      window.google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: async (response) => {
+          try {
+            const res = await client.post('/auth/google', { id_token: response.credential });
+            if (res.data?.success) {
+              const { token, user } = res.data.data;
+              login(token, user);
+              navigate('/');
+            } else {
+              throw new Error(res.data?.message || 'Google sign-up failed');
+            }
+          } catch (err) {
+            console.error(err);
+            setError(err.response?.data?.message || err.message || 'Google sign-up failed');
+          } finally {
+            setIsGoogleLoading(false);
+          }
+        },
+      });
+
+      window.google.accounts.id.prompt((notification) => {
+        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+          // Fallback: use popup mode
+          window.google.accounts.oauth2.initTokenClient({
+            client_id: GOOGLE_CLIENT_ID,
+            scope: 'openid email profile',
+            callback: () => {
+              setIsGoogleLoading(false);
+            },
+          });
+          // If prompt is not displayed, try the button-based flow
+          setIsGoogleLoading(false);
+        }
+      });
+    } catch (err) {
+      console.error('Google Sign-In initialization failed:', err);
+      setError('Google Sign-In is currently unavailable. Please try again later.');
+      setIsGoogleLoading(false);
+    }
+  }, [login, navigate]);
 
   return (
     <div style={{
@@ -153,10 +208,11 @@ export default function Register() {
 
           <button 
             className="btn btn-secondary" 
-            onClick={() => alert("Google Single Sign-On configured on backend. Redirecting via Google accounts...")}
+            onClick={handleGoogleSignUp}
+            disabled={isGoogleLoading}
             style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 10 }}
           >
-            <Globe size={16} /> Google Account
+            <Globe size={16} /> {isGoogleLoading ? 'Connecting...' : 'Google Account'}
           </button>
 
           <div style={{ marginTop: 24, textAlign: 'center', fontSize: 13 }}>
@@ -168,3 +224,4 @@ export default function Register() {
     </div>
   );
 }
+

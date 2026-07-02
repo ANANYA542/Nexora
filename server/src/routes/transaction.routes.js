@@ -36,6 +36,25 @@ router.get('/:id', validate(uuidParamSchema, 'params'), (req, res) => transactio
 
 router.post('/check-balance', validate(balanceCheckSchema), (req, res) => transactionController.checkBalance(req, res));
 
+const importController = require('../controllers/ImportController');
+const multer = require('multer');
+
+const memoryUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: (req, file, cb) => {
+    const allowed = ['text/csv', 'application/vnd.ms-excel', 'application/pdf'];
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Only CSV or PDF files are allowed for import'), false);
+  }
+});
+
+router.post(
+  '/import',
+  memoryUpload.single('statement'),
+  (req, res, next) => importController.importStatement(req, res, next)
+);
+
 router.post(
   '/',
   upload.single('receipt'),

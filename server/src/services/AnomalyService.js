@@ -23,7 +23,9 @@ class AnomalyService {
       let zScoreFlag = false;
       let iqrFlag = false;
       let rollingFlag = false;
+      let mlFlag = false;
       let zScore = null;
+      let mlScore = null;
       let upperBound = null;
       let flagCount = 0;
 
@@ -65,13 +67,23 @@ class AnomalyService {
           }
         }
 
-        console.log('[ANOMALY] Checks:', { zScoreFlag, iqrFlag, rollingFlag, flagCount });
+        // CHECK 4 — ML Isolation Forest
+        const mlAnomalyService = require('./MLAnomalyService');
+        const mlResult = await mlAnomalyService.predictAnomaly(userId, transaction);
+        if (mlResult.isMLAnomaly) {
+          mlFlag = true;
+          mlScore = mlResult.score;
+          flagCount++;
+        }
+
+        console.log('[ANOMALY] Checks:', { zScoreFlag, iqrFlag, rollingFlag, mlFlag, flagCount });
 
         if (flagCount >= 2) {
           ensembleTriggered = true;
           if (zScoreFlag) flagReasons.push(`Z-Score check triggered (score: ${zScore.toFixed(2)}, threshold: 2.5)`);
           if (iqrFlag) flagReasons.push(`IQR check triggered (amount: ${amount.toFixed(2)}, upper bound: ${upperBound.toFixed(2)})`);
           if (rollingFlag) flagReasons.push(`Rolling 30-day avg check triggered (amount: ${amount.toFixed(2)}, 3x rolling avg: ${(recentAvg * 3).toFixed(2)})`);
+          if (mlFlag) flagReasons.push(`ML Isolation Forest check triggered (anomaly score: ${mlScore.toFixed(2)}, threshold: 0.6)`);
         }
       }
 
