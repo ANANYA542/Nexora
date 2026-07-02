@@ -6,7 +6,7 @@ import {
   Wallet, Mail, Lock, User, ShieldAlert, Globe, ArrowRight
 } from 'lucide-react';
 
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '201448844450-37ksnuseiv9grqoe9iuudpqtd4mkn2be.apps.googleusercontent.com';
 
 export default function Register() {
   const { login } = useAuth();
